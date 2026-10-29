@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "id": "minimal_quote_002",
+  "title": "Minimalist Journal",
+  "category": "Minimal",
+  "description": "Clean, elegant story with framed photo slot and editorial typography.",
+  "aspectRatio": "9:16",
+  "referenceWidth": 1080,
+  "referenceHeight": 1920,
+  "previewAsset": "previews/minimal_arch.jpg",
+  "elements": [
+    {
+      "type": "background",
+      "id": "bg_main",
+      "zIndex": 0,
+      "color": "#F8F6F4"
+    },
+    {
+      "type": "photo_slot",
+      "id": "hero_photo",
+      "zIndex": 1,
+      "x": 0.10,
+      "y": 0.12,
+      "width": 0.80,
+      "height": 0.50,
+      "defaultAsset": "previews/minimal_arch.jpg",
+      "cornerRadius": 8.0,
+      "fitMode": "COVER",
+      "editable": true,
+      "label": "Hero Image"
+    },
+    {
+      "type": "text",
+      "id": "quote_title",
+      "zIndex": 2,
+      "x": 0.10,
+      "y": 0.66,
+      "width": 0.80,
+      "height": 0.12,
+      "defaultText": "Simplicity is the ultimate sophistication.",
+      "color": "#211D1E",
+      "fontSize": 24.0,
+      "fontWeight": "BOLD",
+      "fontFamily": "SERIF",
+      "textAlignment": "CENTER",
+      "editable": true,
+      "label": "Quote Heading"
+    },
+    {
+      "type": "text",
+      "id": "author_sub",
+      "zIndex": 2,
+      "x": 0.10,
+      "y": 0.80,
+      "width": 0.80,
+      "height": 0.05,
+      "defaultText": "LEONARDO DA VINCI",
+      "color": "#777174",
+      "fontSize": 12.0,
+      "fontWeight": "NORMAL",
+      "fontFamily": "SANS_SERIF",
+      "textAlignment": "CENTER",
+      "editable": true,
+      "label": "Author Subtitle"
+    }
+  ]
+}

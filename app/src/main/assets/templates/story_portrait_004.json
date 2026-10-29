@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "id": "story_portrait_004",
+  "title": "Pastel Portrait Frame",
+  "category": "Stories",
+  "description": "Soft pastel story template with rounded portrait card.",
+  "aspectRatio": "9:16",
+  "referenceWidth": 1080,
+  "referenceHeight": 1920,
+  "previewAsset": "previews/portrait_lifestyle.jpg",
+  "elements": [
+    {
+      "type": "background",
+      "id": "bg_main",
+      "zIndex": 0,
+      "color": "#FFF0F1",
+      "gradientColors": ["#FFF5F6", "#FFE3E5"],
+      "gradientAngle": 45.0
+    },
+    {
+      "type": "text",
+      "id": "top_header",
+      "zIndex": 1,
+      "x": 0.08,
+      "y": 0.06,
+      "width": 0.84,
+      "height": 0.04,
+      "defaultText": "DAILY MEMORIES",
+      "color": "#C91F2C",
+      "fontSize": 13.0,
+      "fontWeight": "BOLD",
+      "fontFamily": "SANS_SERIF",
+      "textAlignment": "CENTER",
+      "editable": true,
+      "label": "Top Header"
+    },
+    {
+      "type": "photo_slot",
+      "id": "portrait_photo",
+      "zIndex": 2,
+      "x": 0.12,
+      "y": 0.13,
+      "width": 0.76,
+      "height": 0.58,
+      "defaultAsset": "previews/portrait_lifestyle.jpg",
+      "cornerRadius": 24.0,
+      "fitMode": "COVER",
+      "editable": true,
+      "label": "Portrait Photo"
+    },
+    {
+      "type": "text",
+      "id": "main_caption",
+      "zIndex": 3,
+      "x": 0.10,
+      "y": 0.76,
+      "width": 0.80,
+      "height": 0.10,
+      "defaultText": "Chasing Golden Hours",
+      "color": "#211D1E",
+      "fontSize": 32.0,
+      "fontWeight": "BOLD",
+      "fontFamily": "SCRIPT",
+      "textAlignment": "CENTER",
+      "editable": true,
+      "label": "Script Caption"
+    }
+  ]
+}
