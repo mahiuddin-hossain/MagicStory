@@ -22,6 +22,7 @@ data class EditorSnapshot(
     val textCases: Map<String, String> = emptyMap(),
     val textBgColors: Map<String, String> = emptyMap(),
     val textShadowColors: Map<String, String> = emptyMap(),
+    val textFontFamilies: Map<String, String> = emptyMap(),
     val customFontUris: Map<String, String> = emptyMap(),
     val lockedElementIds: Set<String> = emptySet(),
     val hiddenElementIds: Set<String> = emptySet(),
@@ -29,6 +30,7 @@ data class EditorSnapshot(
     val bgGradientColors: List<String>? = null,
     val bgGradientAngle: Float = 0f,
     val bgTextureType: String = "NONE",
+    val elementGradients: Map<String, Pair<List<String>, Float>> = emptyMap(),
     val deletedElementIds: Set<String> = emptySet()
 )
 
@@ -49,6 +51,7 @@ data class MagicStoryEditorState(
     val textCases: Map<String, String> = emptyMap(),
     val textBgColors: Map<String, String> = emptyMap(),
     val textShadowColors: Map<String, String> = emptyMap(),
+    val textFontFamilies: Map<String, String> = emptyMap(),
     val customFontUris: Map<String, String> = emptyMap(),
     val lockedElementIds: Set<String> = emptySet(),
     val hiddenElementIds: Set<String> = emptySet(),
@@ -56,6 +59,7 @@ data class MagicStoryEditorState(
     val bgGradientColors: List<String>? = null,
     val bgGradientAngle: Float = 0f,
     val bgTextureType: String = "NONE",
+    val elementGradients: Map<String, Pair<List<String>, Float>> = emptyMap(),
     val deletedElementIds: Set<String> = emptySet(),
     val selectedElementId: String? = null,
     val multiSelectedElementIds: Set<String> = emptySet(),
@@ -66,6 +70,9 @@ data class MagicStoryEditorState(
     val exportResolution: ExportResolution = ExportResolution.STORY,
     val exportFormat: ExportFormat = ExportFormat.JPEG,
     val exportScale: ExportScale = ExportScale.SCALE_1X,
+    val isEyedropperActive: Boolean = false,
+    val eyedropperSampledColor: String? = null,
+    val eyedropperTouchPos: Pair<Float, Float>? = null,
     val history: List<EditorSnapshot> = emptyList(),
     val historyIndex: Int = -1,
     val isExporting: Boolean = false,
@@ -155,8 +162,16 @@ data class MagicStoryEditorState(
         return textShadowColors[elementId]
     }
 
+    fun getTextFontFamily(elementId: String, defaultFontFamily: String = "SANS_SERIF"): String {
+        return textFontFamilies[elementId] ?: defaultFontFamily
+    }
+
     fun getCustomFontUri(elementId: String): String? {
         return customFontUris[elementId]
+    }
+
+    fun getElementGradient(elementId: String): Pair<List<String>, Float>? {
+        return elementGradients[elementId]
     }
 
     fun isElementLocked(elementId: String): Boolean {

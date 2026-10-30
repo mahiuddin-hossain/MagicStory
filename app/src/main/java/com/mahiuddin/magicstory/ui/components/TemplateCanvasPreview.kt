@@ -1,6 +1,9 @@
 package com.mahiuddin.magicstory.ui.components
 
 import android.graphics.Bitmap
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -71,7 +74,15 @@ fun TemplateCanvasPreview(
 ) {
     val context = LocalContext.current
     val bitmapCache = remember { mutableMapOf<String, Bitmap>() }
-    val aspectRatio = manifest.numericAspectRatio
+    val activeAspectRatio = editorState.exportResolution.width.toFloat() / editorState.exportResolution.height.toFloat()
+    val animatedAspectRatio by animateFloatAsState(
+        targetValue = activeAspectRatio,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "canvasAspectRatio"
+    )
 
     val currentManifest by rememberUpdatedState(manifest)
     val currentState by rememberUpdatedState(editorState)
@@ -286,7 +297,7 @@ fun TemplateCanvasPreview(
     ) {
         Box(
             modifier = Modifier
-                .aspectRatio(aspectRatio)
+                .aspectRatio(animatedAspectRatio)
                 .shadow(elevation = 12.dp, shape = RoundedCornerShape(16.dp), ambientColor = SoftRedShadow, spotColor = SoftRedShadow)
                 .clip(RoundedCornerShape(16.dp))
                 .background(Color.White)
@@ -332,7 +343,7 @@ private fun findHitElementAndHandle(
     editorState.selectedElementId?.let { selectedId ->
         val elem = sortedElements.find { it.id == selectedId }
         if (elem != null) {
-            val handle = checkElementHandleHit(elem, editorState, touchPxX, touchPxY, canvasW, canvasH, scaleFactor)
+            val handle = checkElementHandleHit(elem, manifest, editorState, touchPxX, touchPxY, canvasW, canvasH, scaleFactor)
             if (handle != TouchHandle.NONE) {
                 return Pair(selectedId, handle)
             }
@@ -340,7 +351,7 @@ private fun findHitElementAndHandle(
     }
 
     for (element in sortedElements) {
-        val handle = checkElementHandleHit(element, editorState, touchPxX, touchPxY, canvasW, canvasH, scaleFactor)
+        val handle = checkElementHandleHit(element, manifest, editorState, touchPxX, touchPxY, canvasW, canvasH, scaleFactor)
         if (handle != TouchHandle.NONE) {
             return Pair(element.id, handle)
         }
@@ -351,6 +362,7 @@ private fun findHitElementAndHandle(
 
 private fun checkElementHandleHit(
     element: TemplateElement,
+    manifest: TemplateManifest,
     editorState: MagicStoryEditorState,
     touchPxX: Float,
     touchPxY: Float,
@@ -358,10 +370,20 @@ private fun checkElementHandleHit(
     canvasH: Float,
     scaleFactor: Float
 ): TouchHandle {
+    if (element is TemplateElement.Background) {
+        if (touchPxX in 0f..canvasW && touchPxY in 0f..canvasH) {
+            return TouchHandle.BODY
+        }
+        return TouchHandle.NONE
+    }
+
+    val refW = manifest.referenceWidth.toFloat()
+    val refH = manifest.referenceHeight.toFloat()
+
     val elemX = editorState.getElementX(element.id, getElementDefaultX(element)) * canvasW
     val elemY = editorState.getElementY(element.id, getElementDefaultY(element)) * canvasH
-    val elemW = editorState.getElementW(element.id, getElementDefaultW(element)) * canvasW
-    val elemH = editorState.getElementH(element.id, getElementDefaultH(element)) * canvasH
+    val elemW = editorState.getElementW(element.id, getElementDefaultW(element)) * refW * scaleFactor
+    val elemH = editorState.getElementH(element.id, getElementDefaultH(element)) * refH * scaleFactor
     val rotation = editorState.getElementRotation(element.id, getElementDefaultRotation(element))
 
     val cx = elemX + elemW / 2f

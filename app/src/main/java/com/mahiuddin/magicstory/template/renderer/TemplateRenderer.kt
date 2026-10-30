@@ -47,11 +47,11 @@ object TemplateRenderer {
 
             when (element) {
                 is TemplateElement.Background -> renderBackground(canvas, width, height, element, editorState, scaleFactor)
-                is TemplateElement.Text -> renderText(canvas, width, height, element, editorState, scaleFactor)
-                is TemplateElement.Shape -> renderShape(canvas, width, height, element, editorState, scaleFactor)
-                is TemplateElement.PhotoSlot -> renderPhotoSlot(canvas, width, height, element, editorState, context, scaleFactor, bitmapCache)
-                is TemplateElement.PhotoCard -> renderPhotoCard(canvas, width, height, element, editorState, context, scaleFactor, bitmapCache)
-                is TemplateElement.PillCta -> renderPillCta(canvas, width, height, element, editorState, scaleFactor)
+                is TemplateElement.Text -> renderText(canvas, width, height, element, manifest, editorState, scaleFactor)
+                is TemplateElement.Shape -> renderShape(canvas, width, height, element, manifest, editorState, scaleFactor)
+                is TemplateElement.PhotoSlot -> renderPhotoSlot(canvas, width, height, element, manifest, editorState, context, scaleFactor, bitmapCache)
+                is TemplateElement.PhotoCard -> renderPhotoCard(canvas, width, height, element, manifest, editorState, context, scaleFactor, bitmapCache)
+                is TemplateElement.PillCta -> renderPillCta(canvas, width, height, element, manifest, editorState, scaleFactor)
             }
 
             if (element.opacity < 1.0f) {
@@ -112,14 +112,33 @@ object TemplateRenderer {
 
         when (element) {
             is TemplateElement.Background -> renderBackground(canvas, width, height, element, editorState, scaleFactor)
-            is TemplateElement.Text -> renderText(canvas, width, height, element, editorState, scaleFactor)
-            is TemplateElement.Shape -> renderShape(canvas, width, height, element, editorState, scaleFactor)
-            is TemplateElement.PhotoSlot -> renderPhotoSlot(canvas, width, height, element, editorState, context, scaleFactor, mutableMapOf())
-            is TemplateElement.PhotoCard -> renderPhotoCard(canvas, width, height, element, editorState, context, scaleFactor, mutableMapOf())
-            is TemplateElement.PillCta -> renderPillCta(canvas, width, height, element, editorState, scaleFactor)
+            is TemplateElement.Text -> renderText(canvas, width, height, element, manifest, editorState, scaleFactor)
+            is TemplateElement.Shape -> renderShape(canvas, width, height, element, manifest, editorState, scaleFactor)
+            is TemplateElement.PhotoSlot -> renderPhotoSlot(canvas, width, height, element, manifest, editorState, context, scaleFactor, mutableMapOf())
+            is TemplateElement.PhotoCard -> renderPhotoCard(canvas, width, height, element, manifest, editorState, context, scaleFactor, mutableMapOf())
+            is TemplateElement.PillCta -> renderPillCta(canvas, width, height, element, manifest, editorState, scaleFactor)
         }
 
         canvas.restore()
+    }
+
+    private fun createLinearGradientShader(
+        rect: RectF,
+        colorsHex: List<String>,
+        angleDeg: Float
+    ): Shader {
+        val colorInts = colorsHex.map { safeParseColor(it) }.toIntArray()
+        val rad = Math.toRadians(angleDeg.toDouble())
+        val cx = rect.centerX()
+        val cy = rect.centerY()
+        val halfDiag = (rect.width() + rect.height()) / 2f
+
+        val x0 = cx - (Math.cos(rad) * halfDiag).toFloat()
+        val y0 = cy - (Math.sin(rad) * halfDiag).toFloat()
+        val x1 = cx + (Math.cos(rad) * halfDiag).toFloat()
+        val y1 = cy + (Math.sin(rad) * halfDiag).toFloat()
+
+        return LinearGradient(x0, y0, x1, y1, colorInts, null, Shader.TileMode.CLAMP)
     }
 
     private fun renderBackground(
@@ -132,16 +151,10 @@ object TemplateRenderer {
     ) {
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         val colors = editorState.bgGradientColors ?: bg.gradientColors
+        val angle = editorState.bgGradientAngle
 
         if (!colors.isNullOrEmpty() && colors.size >= 2) {
-            val colorInts = colors.map { safeParseColor(it) }.toIntArray()
-            val gradient = LinearGradient(
-                0f, 0f, canvasW, canvasH,
-                colorInts,
-                null,
-                Shader.TileMode.CLAMP
-            )
-            paint.shader = gradient
+            paint.shader = createLinearGradientShader(RectF(0f, 0f, canvasW, canvasH), colors, angle)
         } else {
             paint.color = safeParseColor(bg.color)
         }
@@ -209,16 +222,20 @@ object TemplateRenderer {
         canvasW: Float,
         canvasH: Float,
         textElem: TemplateElement.Text,
+        manifest: TemplateManifest,
         editorState: MagicStoryEditorState,
         scaleFactor: Float
     ) {
         val textValue = editorState.getTextValue(textElem.id, textElem.defaultText)
         if (textValue.isEmpty()) return
 
+        val refW = manifest.referenceWidth.toFloat()
+        val refH = manifest.referenceHeight.toFloat()
+
         val elemX = editorState.getElementX(textElem.id, textElem.x) * canvasW
         val elemY = editorState.getElementY(textElem.id, textElem.y) * canvasH
-        val elemW = editorState.getElementW(textElem.id, textElem.width) * canvasW
-        val elemH = editorState.getElementH(textElem.id, textElem.height) * canvasH
+        val elemW = editorState.getElementW(textElem.id, textElem.width) * refW * scaleFactor
+        val elemH = editorState.getElementH(textElem.id, textElem.height) * refH * scaleFactor
         val elemRotation = editorState.getElementRotation(textElem.id, textElem.rotation)
 
         val flipX = editorState.getFlipX(textElem.id)
@@ -254,7 +271,12 @@ object TemplateRenderer {
         val lineSpacing = editorState.getLineSpacing(textElem.id, textElem.lineSpacing)
 
         val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = safeParseColor(textColor)
+            val customGrad = editorState.getElementGradient(textElem.id)
+            if (customGrad != null && customGrad.first.size >= 2) {
+                shader = createLinearGradientShader(RectF(elemX, elemY, elemX + elemW, elemY + elemH), customGrad.first, customGrad.second)
+            } else {
+                color = safeParseColor(textColor)
+            }
             textSize = fontSize * scaleFactor
             this.letterSpacing = letterSpacing
 
@@ -268,9 +290,17 @@ object TemplateRenderer {
                 else -> Typeface.NORMAL
             }
 
-            typeface = when (textElem.fontFamily.uppercase()) {
+            val familyKey = editorState.getTextFontFamily(textElem.id, textElem.fontFamily)
+
+            typeface = when (familyKey.uppercase()) {
                 "SERIF" -> Typeface.create(Typeface.SERIF, style)
-                "SCRIPT", "CURSIVE" -> Typeface.create("cursive", style)
+                "SCRIPT", "CURSIVE" -> Typeface.create("cursive", if (style == Typeface.BOLD) Typeface.BOLD_ITALIC else Typeface.ITALIC)
+                "MONOSPACE" -> Typeface.create(Typeface.MONOSPACE, style)
+                "CASUAL" -> Typeface.create("casual", style)
+                "BLACK", "SANS_SERIF_BLACK" -> Typeface.create("sans-serif-black", Typeface.BOLD)
+                "CONDENSED", "SANS_SERIF_CONDENSED" -> Typeface.create("sans-serif-condensed", style)
+                "LIGHT", "SANS_SERIF_LIGHT" -> Typeface.create("sans-serif-light", style)
+                "MEDIUM", "SANS_SERIF_MEDIUM" -> Typeface.create("sans-serif-medium", style)
                 else -> Typeface.create(Typeface.SANS_SERIF, style)
             }
         }
@@ -308,13 +338,17 @@ object TemplateRenderer {
         canvasW: Float,
         canvasH: Float,
         shape: TemplateElement.Shape,
+        manifest: TemplateManifest,
         editorState: MagicStoryEditorState,
         scaleFactor: Float
     ) {
+        val refW = manifest.referenceWidth.toFloat()
+        val refH = manifest.referenceHeight.toFloat()
+
         val x = editorState.getElementX(shape.id, shape.x) * canvasW
         val y = editorState.getElementY(shape.id, shape.y) * canvasH
-        val w = editorState.getElementW(shape.id, shape.width) * canvasW
-        val h = editorState.getElementH(shape.id, shape.height) * canvasH
+        val w = editorState.getElementW(shape.id, shape.width) * refW * scaleFactor
+        val h = editorState.getElementH(shape.id, shape.height) * refH * scaleFactor
         val rotation = editorState.getElementRotation(shape.id, shape.rotation)
 
         val flipX = editorState.getFlipX(shape.id)
@@ -341,7 +375,12 @@ object TemplateRenderer {
             )
         }
 
-        paint.color = safeParseColor(shape.color)
+        val customGrad = editorState.getElementGradient(shape.id)
+        if (customGrad != null && customGrad.first.size >= 2) {
+            paint.shader = createLinearGradientShader(rect, customGrad.first, customGrad.second)
+        } else {
+            paint.color = safeParseColor(shape.color)
+        }
         paint.style = Paint.Style.FILL
 
         val cornerRadius = shape.cornerRadius * scaleFactor
@@ -403,15 +442,19 @@ object TemplateRenderer {
         canvasW: Float,
         canvasH: Float,
         slot: TemplateElement.PhotoSlot,
+        manifest: TemplateManifest,
         editorState: MagicStoryEditorState,
         context: Context,
         scaleFactor: Float,
         bitmapCache: MutableMap<String, Bitmap>
     ) {
+        val refW = manifest.referenceWidth.toFloat()
+        val refH = manifest.referenceHeight.toFloat()
+
         val x = editorState.getElementX(slot.id, slot.x) * canvasW
         val y = editorState.getElementY(slot.id, slot.y) * canvasH
-        val w = editorState.getElementW(slot.id, slot.width) * canvasW
-        val h = editorState.getElementH(slot.id, slot.height) * canvasH
+        val w = editorState.getElementW(slot.id, slot.width) * refW * scaleFactor
+        val h = editorState.getElementH(slot.id, slot.height) * refH * scaleFactor
         val rotation = editorState.getElementRotation(slot.id, slot.rotation)
 
         val flipX = editorState.getFlipX(slot.id)
@@ -445,15 +488,19 @@ object TemplateRenderer {
         canvasW: Float,
         canvasH: Float,
         card: TemplateElement.PhotoCard,
+        manifest: TemplateManifest,
         editorState: MagicStoryEditorState,
         context: Context,
         scaleFactor: Float,
         bitmapCache: MutableMap<String, Bitmap>
     ) {
+        val refW = manifest.referenceWidth.toFloat()
+        val refH = manifest.referenceHeight.toFloat()
+
         val cardX = editorState.getElementX(card.id, card.x) * canvasW
         val cardY = editorState.getElementY(card.id, card.y) * canvasH
-        val cardW = editorState.getElementW(card.id, card.width) * canvasW
-        val cardH = editorState.getElementH(card.id, card.height) * canvasH
+        val cardW = editorState.getElementW(card.id, card.width) * refW * scaleFactor
+        val cardH = editorState.getElementH(card.id, card.height) * refH * scaleFactor
         val rotation = editorState.getElementRotation(card.id, card.rotation)
 
         val flipX = editorState.getFlipX(card.id)
@@ -539,13 +586,17 @@ object TemplateRenderer {
         canvasW: Float,
         canvasH: Float,
         pillCta: TemplateElement.PillCta,
+        manifest: TemplateManifest,
         editorState: MagicStoryEditorState,
         scaleFactor: Float
     ) {
+        val refW = manifest.referenceWidth.toFloat()
+        val refH = manifest.referenceHeight.toFloat()
+
         val x = editorState.getElementX(pillCta.id, pillCta.x) * canvasW
         val y = editorState.getElementY(pillCta.id, pillCta.y) * canvasH
-        val w = editorState.getElementW(pillCta.id, pillCta.width) * canvasW
-        val h = editorState.getElementH(pillCta.id, pillCta.height) * canvasH
+        val w = editorState.getElementW(pillCta.id, pillCta.width) * refW * scaleFactor
+        val h = editorState.getElementH(pillCta.id, pillCta.height) * refH * scaleFactor
         val rotation = editorState.getElementRotation(pillCta.id, pillCta.rotation)
 
         val flipX = editorState.getFlipX(pillCta.id)
@@ -598,16 +649,18 @@ object TemplateRenderer {
         val btnY = y + btnPadding
         val btnW = w * 0.45f
         val btnH = h - (btnPadding * 2f)
+
         val btnRect = RectF(btnX, btnY, btnX + btnW, btnY + btnH)
 
         val btnBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = safeParseColor(pillCta.buttonBgColor)
             style = Paint.Style.FILL
         }
-        canvas.drawRoundRect(btnRect, btnH / 2f, btnH / 2f, btnBgPaint)
+        val btnCornerRadius = (pillCta.cornerRadius * 0.8f) * scaleFactor
+        canvas.drawRoundRect(btnRect, btnCornerRadius, btnCornerRadius, btnBgPaint)
 
-        val btnText = editorState.getTextValue(pillCta.buttonTextId, pillCta.buttonDefaultText)
-        if (btnText.isNotEmpty()) {
+        val buttonText = editorState.getTextValue(pillCta.buttonTextId, pillCta.buttonDefaultText)
+        if (buttonText.isNotEmpty()) {
             val buttonFontSize = editorState.getFontSize(pillCta.buttonTextId, pillCta.buttonFontSize)
             val btnTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = safeParseColor(pillCta.buttonTextColor)
@@ -616,7 +669,7 @@ object TemplateRenderer {
             }
 
             val staticLayout = StaticLayout.Builder.obtain(
-                btnText, 0, btnText.length, btnTextPaint, btnW.toInt().coerceAtLeast(10)
+                buttonText, 0, buttonText.length, btnTextPaint, btnW.toInt().coerceAtLeast(10)
             )
                 .setAlignment(Layout.Alignment.ALIGN_CENTER)
                 .build()
@@ -628,95 +681,107 @@ object TemplateRenderer {
             canvas.restore()
         }
 
-        val isSelected = !editorState.isExporting && editorState.isElementSelected(pillCta.id)
+        val isSelected = !editorState.isExporting && (editorState.isElementSelected(pillCta.id) || editorState.isElementSelected(pillCta.leftTextId) || editorState.isElementSelected(pillCta.buttonTextId))
         drawSelectionOutline(canvas, containerRect, isSelected, scaleFactor)
 
         canvas.restore()
     }
 
-    private fun drawSelectionOutline(canvas: Canvas, rect: RectF, isSelected: Boolean, scaleFactor: Float) {
+    private fun drawSelectionOutline(
+        canvas: Canvas,
+        rect: RectF,
+        isSelected: Boolean,
+        scaleFactor: Float
+    ) {
         if (!isSelected) return
 
-        val primaryRedColor = Color.parseColor("#C91F2C")
-
         val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = primaryRedColor
-            style = Paint.Style.STROKE
-            strokeWidth = 3.5f * scaleFactor
-        }
-        canvas.drawRect(rect, strokePaint)
-
-        val cornerRadius = 9f * scaleFactor
-        val handleFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            style = Paint.Style.FILL
-        }
-        val handleStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = primaryRedColor
+            color = Color.parseColor("#C91F2C")
             style = Paint.Style.STROKE
             strokeWidth = 2.5f * scaleFactor
         }
+        canvas.drawRect(rect, strokePaint)
 
+        val handlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#C91F2C")
+            style = Paint.Style.FILL
+        }
+        val whitePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            style = Paint.Style.FILL
+        }
+
+        val handleRadius = 6.5f * scaleFactor
         val corners = arrayOf(
             Pair(rect.left, rect.top),
             Pair(rect.right, rect.top),
             Pair(rect.left, rect.bottom),
             Pair(rect.right, rect.bottom)
         )
+
         corners.forEach { (cx, cy) ->
-            canvas.drawCircle(cx, cy, cornerRadius, handleFillPaint)
-            canvas.drawCircle(cx, cy, cornerRadius, handleStrokePaint)
+            canvas.drawCircle(cx, cy, handleRadius, handlePaint)
+            canvas.drawCircle(cx, cy, handleRadius * 0.5f, whitePaint)
         }
 
-        val edgeW = 12f * scaleFactor
-        val edgeH = 6f * scaleFactor
-        val edges = arrayOf(
-            RectF(rect.centerX() - edgeW / 2f, rect.top - edgeH / 2f, rect.centerX() + edgeW / 2f, rect.top + edgeH / 2f),
-            RectF(rect.centerX() - edgeW / 2f, rect.bottom - edgeH / 2f, rect.centerX() + edgeW / 2f, rect.bottom + edgeH / 2f),
-            RectF(rect.left - edgeH / 2f, rect.centerY() - edgeW / 2f, rect.left + edgeH / 2f, rect.centerY() + edgeW / 2f),
-            RectF(rect.right - edgeH / 2f, rect.centerY() - edgeW / 2f, rect.right + edgeH / 2f, rect.centerY() + edgeW / 2f)
-        )
-        edges.forEach { edgeRect ->
-            canvas.drawRoundRect(edgeRect, 4f * scaleFactor, 4f * scaleFactor, handleFillPaint)
-            canvas.drawRoundRect(edgeRect, 4f * scaleFactor, 4f * scaleFactor, handleStrokePaint)
+        val topCenterX = rect.centerX()
+        val topCenterY = rect.top - (22f * scaleFactor)
+
+        val stemPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#C91F2C")
+            style = Paint.Style.STROKE
+            strokeWidth = 2f * scaleFactor
         }
+        canvas.drawLine(rect.centerX(), rect.top, topCenterX, topCenterY, stemPaint)
 
-        val stemTopY = rect.top - 28f * scaleFactor
-        canvas.drawLine(rect.centerX(), rect.top, rect.centerX(), stemTopY, handleStrokePaint)
-
-        val rotRadius = 12f * scaleFactor
-        canvas.drawCircle(rect.centerX(), stemTopY, rotRadius, handleFillPaint)
-        canvas.drawCircle(rect.centerX(), stemTopY, rotRadius, handleStrokePaint)
-
-        val rotTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = primaryRedColor
-            textSize = 14f * scaleFactor
-            textAlign = Paint.Align.CENTER
-            isFakeBoldText = true
-            typeface = Typeface.DEFAULT_BOLD
-        }
-        canvas.drawText("↻", rect.centerX(), stemTopY + 4.5f * scaleFactor, rotTextPaint)
+        canvas.drawCircle(topCenterX, topCenterY, handleRadius * 1.1f, handlePaint)
+        canvas.drawCircle(topCenterX, topCenterY, handleRadius * 0.6f, whitePaint)
     }
 
     private fun getOrLoadBitmap(
         context: Context,
-        pathOrUri: String?,
-        reqWidth: Int,
-        reqHeight: Int,
-        cache: MutableMap<String, Bitmap>
+        uriString: String?,
+        reqW: Int,
+        reqH: Int,
+        bitmapCache: MutableMap<String, Bitmap>
     ): Bitmap {
-        val cacheKey = "$pathOrUri-${reqWidth}x$reqHeight"
-        return cache.getOrPut(cacheKey) {
-            BitmapUtils.loadBitmap(context, pathOrUri, reqWidth, reqHeight)
+        val key = uriString ?: "fallback"
+        return bitmapCache.getOrPut(key) {
+            BitmapUtils.loadBitmap(context, uriString, reqW.coerceAtLeast(100), reqH.coerceAtLeast(100))
         }
     }
 
-    private fun safeParseColor(colorStr: String?): Int {
-        if (colorStr.isNullOrBlank()) return Color.TRANSPARENT
+    fun sampleColorAt(
+        context: Context,
+        manifest: TemplateManifest,
+        editorState: MagicStoryEditorState,
+        normX: Float,
+        normY: Float,
+        width: Int = 360,
+        height: Int = 640
+    ): String {
         return try {
-            Color.parseColor(colorStr)
-        } catch (_: Exception) {
-            Color.WHITE
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val tempCanvas = Canvas(bitmap)
+            renderToCanvas(tempCanvas, width.toFloat(), height.toFloat(), manifest, editorState, context)
+
+            val px = (normX * width).toInt().coerceIn(0, width - 1)
+            val py = (normY * height).toInt().coerceIn(0, height - 1)
+            val pixel = bitmap.getPixel(px, py)
+            bitmap.recycle()
+
+            String.format("#%06X", 0xFFFFFF and pixel)
+        } catch (e: Exception) {
+            "#C91F2C"
+        }
+    }
+
+    private fun safeParseColor(colorHex: String?): Int {
+        if (colorHex.isNullOrBlank()) return Color.TRANSPARENT
+        return try {
+            Color.parseColor(colorHex)
+        } catch (e: Exception) {
+            Color.BLACK
         }
     }
 }

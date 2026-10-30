@@ -6,6 +6,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -18,6 +20,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,9 +31,12 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,17 +51,20 @@ import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Colorize
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Flip
+import androidx.compose.material.icons.filled.FontDownload
 import androidx.compose.material.icons.filled.FormatAlignCenter
 import androidx.compose.material.icons.filled.FormatBold
 import androidx.compose.material.icons.filled.FormatColorFill
 import androidx.compose.material.icons.filled.FormatLineSpacing
 import androidx.compose.material.icons.filled.FormatSize
+import androidx.compose.material.icons.filled.Gradient
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Lock
@@ -98,20 +107,27 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.mahiuddin.magicstory.domain.model.ExportFormat
 import com.mahiuddin.magicstory.domain.model.ExportResolution
 import com.mahiuddin.magicstory.domain.model.ExportScale
@@ -130,6 +146,7 @@ import com.mahiuddin.magicstory.ui.theme.SubtleBorder
 
 enum class ActiveSubTool {
     NONE,
+    FONT_FAMILY,
     FONT_SIZE,
     TEXT_COLOR,
     TEXT_SPACING,
@@ -156,6 +173,11 @@ fun EditorScreen(
     var showAspectMenu by remember { mutableStateOf(false) }
     var showLayersDrawer by remember { mutableStateOf(false) }
     var showExportOptionsDialog by remember { mutableStateOf(false) }
+    var showColorPickerDialog by remember { mutableStateOf(false) }
+    var showGradientBuilderDialog by remember { mutableStateOf(false) }
+    var colorPickerTargetId by remember { mutableStateOf<String?>(null) }
+    var colorPickerInputHex by remember { mutableStateOf("#C91F2C") }
+
     var activeSubTool by remember { mutableStateOf(ActiveSubTool.NONE) }
     var textEditDialogVisible by remember { mutableStateOf(false) }
 
@@ -255,10 +277,6 @@ fun EditorScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .clickable {
-                            viewModel.selectElement(null)
-                            activeSubTool = ActiveSubTool.NONE
-                        }
                         .padding(12.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -266,7 +284,7 @@ fun EditorScreen(
                         manifest = state.template,
                         editorState = state,
                         modifier = Modifier.fillMaxSize(),
-                        isInteractive = true,
+                        isInteractive = !state.isEyedropperActive,
                         onElementSelect = { id ->
                             viewModel.selectElement(id)
                             activeSubTool = ActiveSubTool.NONE
@@ -278,6 +296,44 @@ fun EditorScreen(
                         onDragEnd = { viewModel.commitGestureEnd() }
                     )
 
+                    // Interactive Eyedropper Layer Overlay
+                    if (state.isEyedropperActive) {
+                        val activeSelectedId = state.selectedElementId ?: "bg"
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(Unit) {
+                                    detectTapGestures(
+                                        onPress = { offset ->
+                                            val normX = (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
+                                            val normY = (offset.y / size.height.toFloat()).coerceIn(0f, 1f)
+                                            val sampledHex = TemplateRenderer.sampleColorAt(context, state.template, state, normX, normY)
+                                            viewModel.updateEyedropperSample(sampledHex, offset.x, offset.y)
+                                            awaitRelease()
+                                            viewModel.updateTextColor(activeSelectedId, sampledHex)
+                                            viewModel.setEyedropperActive(false)
+                                        }
+                                    )
+                                }
+                        ) {
+                            state.eyedropperTouchPos?.let { (px, py) ->
+                                val sampledColor = state.eyedropperSampledColor ?: "#C91F2C"
+                                Box(
+                                    modifier = Modifier
+                                        .offset { IntOffset((px - 45.dp.toPx()).toInt(), (py - 85.dp.toPx()).toInt()) }
+                                        .size(80.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(android.graphics.Color.parseColor(sampledColor)))
+                                        .border(3.5.dp, Color.White, CircleShape)
+                                        .shadow(12.dp, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(sampledColor, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
+
                     // Contextual Canvas Top Hint
                     Box(
                         modifier = Modifier
@@ -288,14 +344,18 @@ fun EditorScreen(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = Icons.Default.TouchApp,
+                                imageVector = if (state.isEyedropperActive) Icons.Default.Colorize else Icons.Default.TouchApp,
                                 contentDescription = null,
                                 tint = Color.White,
                                 modifier = Modifier.size(14.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (state.selectedElementId != null) "Drag to move | Pinch/Corners to resize | Top ↻ to rotate" else "Tap any element to select & edit",
+                                text = when {
+                                    state.isEyedropperActive -> "Touch anywhere on canvas to pick a color"
+                                    state.selectedElementId != null -> "Drag to move | Pinch/Corners to resize | Top ↻ to rotate"
+                                    else -> "Tap any element or background to select & edit"
+                                },
                                 color = Color.White,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium
@@ -363,11 +423,13 @@ fun EditorScreen(
                                             tint = if (isLocked) PrimaryRed else MainText
                                         )
                                     }
-                                    IconButton(onClick = { viewModel.duplicateElement(selectedId) }) {
-                                        Icon(imageVector = Icons.Default.ContentCopy, contentDescription = "Duplicate", tint = MainText)
-                                    }
-                                    IconButton(onClick = { viewModel.deleteElement(selectedId) }) {
-                                        Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete", tint = PrimaryRed)
+                                    if (selectedElem !is TemplateElement.Background) {
+                                        IconButton(onClick = { viewModel.duplicateElement(selectedId) }) {
+                                            Icon(imageVector = Icons.Default.ContentCopy, contentDescription = "Duplicate", tint = MainText)
+                                        }
+                                        IconButton(onClick = { viewModel.deleteElement(selectedId) }) {
+                                            Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete", tint = PrimaryRed)
+                                        }
                                     }
                                     IconButton(onClick = {
                                         viewModel.selectElement(null)
@@ -382,6 +444,61 @@ fun EditorScreen(
 
                             // Sub-Tool Expansion Panel
                             when (activeSubTool) {
+                                ActiveSubTool.FONT_FAMILY -> {
+                                    val currentFont = state.getTextFontFamily(selectedId, "SANS_SERIF")
+                                    val fonts = listOf(
+                                        "SANS_SERIF" to Pair("Roboto Sans", FontFamily.SansSerif),
+                                        "SERIF" to Pair("Editorial Serif", FontFamily.Serif),
+                                        "SCRIPT" to Pair("Dancing Script", FontFamily.Cursive),
+                                        "MONOSPACE" to Pair("Space Mono", FontFamily.Monospace),
+                                        "CASUAL" to Pair("Casual Sans", FontFamily.Default),
+                                        "SANS_SERIF_BLACK" to Pair("Impact Heavy", FontFamily.SansSerif),
+                                        "SANS_SERIF_CONDENSED" to Pair("Fashion Condensed", FontFamily.SansSerif),
+                                        "SANS_SERIF_LIGHT" to Pair("Montserrat Light", FontFamily.SansSerif),
+                                        "SANS_SERIF_MEDIUM" to Pair("Inter Medium", FontFamily.SansSerif)
+                                    )
+
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .horizontalScroll(rememberScrollState())
+                                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        fonts.forEach { (key, info) ->
+                                            val isSelected = currentFont.equals(key, ignoreCase = true)
+                                            Surface(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(12.dp))
+                                                    .clickable { viewModel.updateFontFamily(selectedId, key) },
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = if (isSelected) PrimaryRed.copy(alpha = 0.15f) else SecondaryBackground,
+                                                border = BorderStroke(1.5.dp, if (isSelected) PrimaryRed else SubtleBorder)
+                                            ) {
+                                                Column(
+                                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                                    horizontalAlignment = Alignment.CenterHorizontally
+                                                ) {
+                                                    Text(
+                                                        text = "Aa MagicStory",
+                                                        fontFamily = info.second,
+                                                        fontSize = 15.sp,
+                                                        fontWeight = if (key.contains("BLACK") || key.contains("CONDENSED")) FontWeight.Bold else FontWeight.Normal,
+                                                        color = MainText
+                                                    )
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    Text(
+                                                        text = info.first,
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (isSelected) PrimaryRed else SecondaryText
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                                 ActiveSubTool.FONT_SIZE -> {
                                     val currentSize = state.getFontSize(selectedId, 24f)
                                     Row(
@@ -445,25 +562,80 @@ fun EditorScreen(
                                 ActiveSubTool.TEXT_COLOR -> {
                                     val colorPalette = listOf(
                                         "#000000", "#FFFFFF", "#C91F2C", "#A91521", "#E53945",
-                                        "#211D1E", "#777174", "#FFF7F7", "#1E3A8A", "#065F46", "#D97706"
+                                        "#211D1E", "#777174", "#FFF7F7", "#1E3A8A", "#065F46", "#D97706", "#8B5CF6"
                                     )
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .horizontalScroll(rememberScrollState())
-                                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        colorPalette.forEach { colorHex ->
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .horizontalScroll(rememberScrollState())
+                                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            // Eyedropper Button
                                             Surface(
                                                 modifier = Modifier
-                                                    .size(36.dp)
+                                                    .size(38.dp)
                                                     .clip(CircleShape)
-                                                    .clickable { viewModel.updateTextColor(selectedId, colorHex) },
+                                                    .clickable { viewModel.setEyedropperActive(true) },
                                                 shape = CircleShape,
-                                                color = Color(android.graphics.Color.parseColor(colorHex)),
-                                                border = BorderStroke(1.5.dp, SubtleBorder)
-                                            ) {}
+                                                color = PrimaryRed.copy(alpha = 0.15f),
+                                                border = BorderStroke(1.5.dp, PrimaryRed)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(imageVector = Icons.Default.Colorize, contentDescription = "Eyedropper", tint = PrimaryRed, modifier = Modifier.size(20.dp))
+                                                }
+                                            }
+
+                                            // Custom Hex Color Wheel Button
+                                            Surface(
+                                                modifier = Modifier
+                                                    .size(38.dp)
+                                                    .clip(CircleShape)
+                                                    .clickable {
+                                                        colorPickerTargetId = selectedId
+                                                        showColorPickerDialog = true
+                                                    },
+                                                shape = CircleShape,
+                                                color = SecondaryBackground,
+                                                border = BorderStroke(1.5.dp, PrimaryRed)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(imageVector = Icons.Default.Palette, contentDescription = "Color Picker", tint = PrimaryRed, modifier = Modifier.size(20.dp))
+                                                }
+                                            }
+
+                                            // Custom Gradient Builder Trigger Button
+                                            Surface(
+                                                modifier = Modifier
+                                                    .size(38.dp)
+                                                    .clip(CircleShape)
+                                                    .clickable {
+                                                        colorPickerTargetId = selectedId
+                                                        showGradientBuilderDialog = true
+                                                    },
+                                                shape = CircleShape,
+                                                color = PrimaryRed,
+                                                border = BorderStroke(1.5.dp, Color.White)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(imageVector = Icons.Default.Gradient, contentDescription = "Custom Gradient Builder", tint = Color.White, modifier = Modifier.size(20.dp))
+                                                }
+                                            }
+
+                                            // Preset Swatches
+                                            colorPalette.forEach { colorHex ->
+                                                Surface(
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .clip(CircleShape)
+                                                        .clickable { viewModel.updateTextColor(selectedId, colorHex) },
+                                                    shape = CircleShape,
+                                                    color = Color(android.graphics.Color.parseColor(colorHex)),
+                                                    border = BorderStroke(1.5.dp, SubtleBorder)
+                                                ) {}
+                                            }
                                         }
                                     }
                                 }
@@ -641,28 +813,43 @@ fun EditorScreen(
                                         Text("Rotate", fontSize = 11.sp, color = MainText)
                                     }
                                 } else {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .clickable { textEditDialogVisible = true }
-                                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                                    ) {
-                                        Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit Text", tint = MainText)
-                                        Text("Edit", fontSize = 11.sp, color = MainText)
-                                    }
+                                    if (selectedElem !is TemplateElement.Background) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable { textEditDialogVisible = true }
+                                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                        ) {
+                                            Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit Text", tint = MainText)
+                                            Text("Edit", fontSize = 11.sp, color = MainText)
+                                        }
 
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .clickable {
-                                                activeSubTool = if (activeSubTool == ActiveSubTool.FONT_SIZE) ActiveSubTool.NONE else ActiveSubTool.FONT_SIZE
-                                            }
-                                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                                    ) {
-                                        Icon(imageVector = Icons.Default.FormatSize, contentDescription = "Font Size", tint = MainText)
-                                        Text("Size", fontSize = 11.sp, color = MainText)
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable {
+                                                    activeSubTool = if (activeSubTool == ActiveSubTool.FONT_FAMILY) ActiveSubTool.NONE else ActiveSubTool.FONT_FAMILY
+                                                }
+                                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                        ) {
+                                            Icon(imageVector = Icons.Default.FontDownload, contentDescription = "Font Family", tint = MainText)
+                                            Text("Font", fontSize = 11.sp, color = MainText)
+                                        }
+
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable {
+                                                    activeSubTool = if (activeSubTool == ActiveSubTool.FONT_SIZE) ActiveSubTool.NONE else ActiveSubTool.FONT_SIZE
+                                                }
+                                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                        ) {
+                                            Icon(imageVector = Icons.Default.FormatSize, contentDescription = "Font Size", tint = MainText)
+                                            Text("Size", fontSize = 11.sp, color = MainText)
+                                        }
                                     }
 
                                     Column(
@@ -674,89 +861,91 @@ fun EditorScreen(
                                             }
                                             .padding(horizontal = 12.dp, vertical = 8.dp)
                                     ) {
-                                        Icon(imageVector = Icons.Default.Palette, contentDescription = "Color", tint = MainText)
+                                        Icon(imageVector = Icons.Default.Palette, contentDescription = "Color & Gradient", tint = MainText)
                                         Text("Color", fontSize = 11.sp, color = MainText)
                                     }
 
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .clickable {
-                                                activeSubTool = if (activeSubTool == ActiveSubTool.TEXT_SPACING) ActiveSubTool.NONE else ActiveSubTool.TEXT_SPACING
-                                            }
-                                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                                    ) {
-                                        Icon(imageVector = Icons.Default.FormatLineSpacing, contentDescription = "Spacing", tint = MainText)
-                                        Text("Spacing", fontSize = 11.sp, color = MainText)
-                                    }
-
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .clickable {
-                                                activeSubTool = if (activeSubTool == ActiveSubTool.TEXT_BG) ActiveSubTool.NONE else ActiveSubTool.TEXT_BG
-                                            }
-                                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                                    ) {
-                                        Icon(imageVector = Icons.Default.FormatColorFill, contentDescription = "Bg Pill", tint = MainText)
-                                        Text("Bg Pill", fontSize = 11.sp, color = MainText)
-                                    }
-
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .clickable {
-                                                viewModel.toggleTextCase(selectedId)
-                                            }
-                                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                                    ) {
-                                        Icon(imageVector = Icons.Default.TextFields, contentDescription = "Case", tint = MainText)
-                                        Text("Case", fontSize = 11.sp, color = MainText)
-                                    }
-
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .clickable {
-                                                val currentWeight = state.getTextFontWeight(selectedId, "NORMAL")
-                                                val nextWeight = if (currentWeight.uppercase() == "BOLD") "NORMAL" else "BOLD"
-                                                viewModel.updateFontWeight(selectedId, nextWeight)
-                                            }
-                                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                                    ) {
-                                        Icon(imageVector = Icons.Default.FormatBold, contentDescription = "Bold", tint = MainText)
-                                        Text("Bold", fontSize = 11.sp, color = MainText)
-                                    }
-
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .clickable {
-                                                val currentAlign = state.getTextAlignment(selectedId, "CENTER")
-                                                val nextAlign = when (currentAlign.uppercase()) {
-                                                    "LEFT" -> "CENTER"
-                                                    "CENTER" -> "RIGHT"
-                                                    else -> "LEFT"
+                                    if (selectedElem !is TemplateElement.Background) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable {
+                                                    activeSubTool = if (activeSubTool == ActiveSubTool.TEXT_SPACING) ActiveSubTool.NONE else ActiveSubTool.TEXT_SPACING
                                                 }
-                                                viewModel.updateTextAlignment(selectedId, nextAlign)
-                                            }
-                                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = when (state.getTextAlignment(selectedId, "CENTER").uppercase()) {
-                                                "LEFT" -> Icons.AutoMirrored.Filled.FormatAlignLeft
-                                                "RIGHT" -> Icons.AutoMirrored.Filled.FormatAlignRight
-                                                else -> Icons.Default.FormatAlignCenter
-                                            },
-                                            contentDescription = "Align",
-                                            tint = MainText
-                                        )
-                                        Text("Align", fontSize = 11.sp, color = MainText)
+                                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                        ) {
+                                            Icon(imageVector = Icons.Default.FormatLineSpacing, contentDescription = "Spacing", tint = MainText)
+                                            Text("Spacing", fontSize = 11.sp, color = MainText)
+                                        }
+
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable {
+                                                    activeSubTool = if (activeSubTool == ActiveSubTool.TEXT_BG) ActiveSubTool.NONE else ActiveSubTool.TEXT_BG
+                                                }
+                                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                        ) {
+                                            Icon(imageVector = Icons.Default.FormatColorFill, contentDescription = "Bg Pill", tint = MainText)
+                                            Text("Bg Pill", fontSize = 11.sp, color = MainText)
+                                        }
+
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable {
+                                                    viewModel.toggleTextCase(selectedId)
+                                                }
+                                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                        ) {
+                                            Icon(imageVector = Icons.Default.TextFields, contentDescription = "Case", tint = MainText)
+                                            Text("Case", fontSize = 11.sp, color = MainText)
+                                        }
+
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable {
+                                                    val currentWeight = state.getTextFontWeight(selectedId, "NORMAL")
+                                                    val nextWeight = if (currentWeight.uppercase() == "BOLD") "NORMAL" else "BOLD"
+                                                    viewModel.updateFontWeight(selectedId, nextWeight)
+                                                }
+                                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                        ) {
+                                            Icon(imageVector = Icons.Default.FormatBold, contentDescription = "Bold", tint = MainText)
+                                            Text("Bold", fontSize = 11.sp, color = MainText)
+                                        }
+
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable {
+                                                    val currentAlign = state.getTextAlignment(selectedId, "CENTER")
+                                                    val nextAlign = when (currentAlign.uppercase()) {
+                                                        "LEFT" -> "CENTER"
+                                                        "CENTER" -> "RIGHT"
+                                                        else -> "LEFT"
+                                                    }
+                                                    viewModel.updateTextAlignment(selectedId, nextAlign)
+                                                }
+                                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = when (state.getTextAlignment(selectedId, "CENTER").uppercase()) {
+                                                    "LEFT" -> Icons.AutoMirrored.Filled.FormatAlignLeft
+                                                    "RIGHT" -> Icons.AutoMirrored.Filled.FormatAlignRight
+                                                    else -> Icons.Default.FormatAlignCenter
+                                                },
+                                                contentDescription = "Align",
+                                                tint = MainText
+                                            )
+                                            Text("Align", fontSize = 11.sp, color = MainText)
+                                        }
                                     }
 
                                     Column(
@@ -772,17 +961,19 @@ fun EditorScreen(
                                         Text("Texture", fontSize = 11.sp, color = MainText)
                                     }
 
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .clickable {
-                                                activeSubTool = if (activeSubTool == ActiveSubTool.ROTATE) ActiveSubTool.NONE else ActiveSubTool.ROTATE
-                                            }
-                                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                                    ) {
-                                        Icon(imageVector = Icons.AutoMirrored.Filled.RotateRight, contentDescription = "Rotate", tint = MainText)
-                                        Text("Rotate", fontSize = 11.sp, color = MainText)
+                                    if (selectedElem !is TemplateElement.Background) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable {
+                                                    activeSubTool = if (activeSubTool == ActiveSubTool.ROTATE) ActiveSubTool.NONE else ActiveSubTool.ROTATE
+                                                }
+                                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                        ) {
+                                            Icon(imageVector = Icons.AutoMirrored.Filled.RotateRight, contentDescription = "Rotate", tint = MainText)
+                                            Text("Rotate", fontSize = 11.sp, color = MainText)
+                                        }
                                     }
                                 }
                             }
@@ -848,18 +1039,26 @@ fun EditorScreen(
                         )
 
                         // Scrollable List of Layers with Transparent Checkerboard Thumbnails & Drag Handles
-                        Column(
+                        var draggingIndex by remember { mutableStateOf<Int?>(null) }
+                        var draggingItemOffsetY by remember { mutableFloatStateOf(0f) }
+                        val density = LocalDensity.current
+                        val rowHeightPx = with(density) { 68.dp.toPx() }
+
+                        val sortedLayers = state.template.elements
+                            .filter { !state.isElementDeleted(it.id) }
+                            .sortedByDescending { state.getElementZIndex(it.id, it.zIndex) }
+
+                        LazyColumn(
                             modifier = Modifier
                                 .weight(1f)
-                                .fillMaxWidth()
-                                .verticalScroll(rememberScrollState()),
+                                .fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            val sortedLayers = state.template.elements
-                                .filter { !state.isElementDeleted(it.id) }
-                                .sortedByDescending { state.getElementZIndex(it.id, it.zIndex) }
-
-                            sortedLayers.forEachIndexed { index, element ->
+                            itemsIndexed(
+                                items = sortedLayers,
+                                key = { _, item -> item.id }
+                            ) { index, element ->
+                                val isDragging = draggingIndex == index
                                 val isLocked = state.isElementLocked(element.id)
                                 val isHidden = state.isElementHidden(element.id)
                                 val isSelected = state.selectedElementId == element.id
@@ -871,11 +1070,34 @@ fun EditorScreen(
                                     isSelected = isSelected,
                                     isLocked = isLocked,
                                     isHidden = isHidden,
+                                    isDragging = isDragging,
+                                    offsetY = if (isDragging) draggingItemOffsetY else 0f,
                                     manifest = state.template,
                                     state = state,
                                     context = context,
                                     onSelect = { viewModel.selectElement(element.id) },
-                                    onDragReorder = { delta -> viewModel.reorderLayerByOffset(element.id, delta) },
+                                    onDragStart = {
+                                        draggingIndex = index
+                                        draggingItemOffsetY = 0f
+                                    },
+                                    onDrag = { dragAmountY ->
+                                        draggingItemOffsetY += dragAmountY
+                                        val moveThreshold = rowHeightPx * 0.5f
+
+                                        if (draggingItemOffsetY > moveThreshold && index < sortedLayers.size - 1) {
+                                            viewModel.reorderLayerByOffset(element.id, 1)
+                                            draggingIndex = index + 1
+                                            draggingItemOffsetY -= rowHeightPx
+                                        } else if (draggingItemOffsetY < -moveThreshold && index > 0) {
+                                            viewModel.reorderLayerByOffset(element.id, -1)
+                                            draggingIndex = index - 1
+                                            draggingItemOffsetY += rowHeightPx
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        draggingIndex = null
+                                        draggingItemOffsetY = 0f
+                                    },
                                     onToggleLock = { viewModel.toggleElementLock(element.id) },
                                     onToggleHide = { viewModel.toggleElementHide(element.id) },
                                     onDelete = { viewModel.deleteElement(element.id) }
@@ -886,6 +1108,115 @@ fun EditorScreen(
                 }
             }
         }
+    }
+
+    // Custom Hex Color Picker Dialog
+    if (showColorPickerDialog && colorPickerTargetId != null) {
+        val targetId = colorPickerTargetId!!
+        AlertDialog(
+            onDismissRequest = { showColorPickerDialog = false },
+            title = { Text("Custom Color Picker", fontWeight = FontWeight.Bold, color = MainText) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    try {
+                                        Color(android.graphics.Color.parseColor(colorPickerInputHex))
+                                    } catch (_: Exception) {
+                                        Color.Red
+                                    }
+                                )
+                                .border(1.5.dp, SubtleBorder, RoundedCornerShape(8.dp))
+                        )
+
+                        OutlinedTextField(
+                            value = colorPickerInputHex,
+                            onValueChange = { colorPickerInputHex = it },
+                            label = { Text("Hex Color (#RRGGBB)") },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = PrimaryRed, cursorColor = PrimaryRed)
+                        )
+                    }
+
+                    Text("Quick Swatches", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = SecondaryText)
+                    val sampleSwatches = listOf(
+                        "#C91F2C", "#A91521", "#E53945", "#000000", "#FFFFFF", "#1E3A8A",
+                        "#065F46", "#D97706", "#8B5CF6", "#EC4899", "#10B981", "#3B82F6"
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        sampleSwatches.forEach { hex ->
+                            Surface(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .clickable { colorPickerInputHex = hex },
+                                shape = CircleShape,
+                                color = Color(android.graphics.Color.parseColor(hex)),
+                                border = BorderStroke(1.dp, SubtleBorder)
+                            ) {}
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        try {
+                            Color(android.graphics.Color.parseColor(colorPickerInputHex))
+                            viewModel.updateTextColor(targetId, colorPickerInputHex)
+                        } catch (_: Exception) {}
+                        showColorPickerDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryRed)
+                ) {
+                    Text("Apply Color")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showColorPickerDialog = false }) {
+                    Text("Cancel", color = MainText)
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
+
+    // Custom Gradient Builder Dialog
+    if (showGradientBuilderDialog && colorPickerTargetId != null) {
+        val targetId = colorPickerTargetId!!
+        val selectedElem = state.template.elements.find { it.id == targetId }
+        val currentGrad = state.getElementGradient(targetId)
+        val initialColors = currentGrad?.first ?: if (selectedElem is TemplateElement.Background) state.bgGradientColors ?: listOf("#FF512F", "#DD2476") else listOf("#FF512F", "#DD2476")
+        val initialAngle = currentGrad?.second ?: if (selectedElem is TemplateElement.Background) state.bgGradientAngle else 45f
+
+        CustomGradientPickerDialog(
+            initialColors = initialColors,
+            initialAngle = initialAngle,
+            onDismiss = { showGradientBuilderDialog = false },
+            onApply = { colors, angle ->
+                if (selectedElem is TemplateElement.Background) {
+                    viewModel.updateBgGradient(colors, angle)
+                } else {
+                    viewModel.updateElementGradient(targetId, colors, angle)
+                }
+                showGradientBuilderDialog = false
+            }
+        )
     }
 
     // High-Res & Export Format Dialog
@@ -999,6 +1330,219 @@ fun EditorScreen(
 }
 
 @Composable
+private fun CustomGradientPickerDialog(
+    initialColors: List<String>,
+    initialAngle: Float,
+    onDismiss: () -> Unit,
+    onApply: (List<String>, Float) -> Unit
+) {
+    var colors by remember { mutableStateOf(if (initialColors.size >= 2) initialColors else listOf("#FF512F", "#DD2476")) }
+    var selectedStopIndex by remember { mutableIntStateOf(0) }
+    var angle by remember { mutableFloatStateOf(initialAngle) }
+    var hexInput by remember { mutableStateOf(colors.getOrElse(selectedStopIndex) { "#C91F2C" }) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.Default.Palette, contentDescription = null, tint = PrimaryRed)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Custom Gradient Builder", fontWeight = FontWeight.Bold, color = MainText)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Live Gradient Preview Box
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(80.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            brush = Brush.linearGradient(
+                                colors = colors.map {
+                                    try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Red }
+                                }
+                            )
+                        )
+                        .border(1.5.dp, SubtleBorder, RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Angle: ${angle.toInt()}°",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        modifier = Modifier
+                            .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+
+                // Color Stops Rail Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Color Stops (${colors.size})", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MainText)
+
+                    Row {
+                        IconButton(
+                            onClick = {
+                                if (colors.size < 5) {
+                                    colors = colors + "#3B82F6"
+                                    selectedStopIndex = colors.size - 1
+                                    hexInput = "#3B82F6"
+                                }
+                            },
+                            enabled = colors.size < 5
+                        ) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = "Add Stop", tint = PrimaryRed)
+                        }
+
+                        IconButton(
+                            onClick = {
+                                if (colors.size > 2) {
+                                    colors = colors.filterIndexed { idx, _ -> idx != selectedStopIndex }
+                                    selectedStopIndex = selectedStopIndex.coerceAtMost(colors.size - 1)
+                                    hexInput = colors[selectedStopIndex]
+                                }
+                            },
+                            enabled = colors.size > 2
+                        ) {
+                            Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete Stop", tint = PrimaryRed)
+                        }
+                    }
+                }
+
+                // Color Stop Thumbs
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    colors.forEachIndexed { idx, hex ->
+                        val isSelected = idx == selectedStopIndex
+                        Box(
+                            modifier = Modifier
+                                .size(if (isSelected) 40.dp else 32.dp)
+                                .clip(CircleShape)
+                                .background(try { Color(android.graphics.Color.parseColor(hex)) } catch (_: Exception) { Color.Red })
+                                .border(
+                                    width = if (isSelected) 3.dp else 1.dp,
+                                    color = if (isSelected) PrimaryRed else SubtleBorder,
+                                    shape = CircleShape
+                                )
+                                .clickable {
+                                    selectedStopIndex = idx
+                                    hexInput = hex
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("${idx + 1}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                        }
+                    }
+                }
+
+                // Edit Active Stop Hex Color
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedTextField(
+                        value = hexInput,
+                        onValueChange = {
+                            hexInput = it
+                            try {
+                                Color(android.graphics.Color.parseColor(it))
+                                colors = colors.toMutableList().apply { set(selectedStopIndex, it) }
+                            } catch (_: Exception) {}
+                        },
+                        label = { Text("Stop ${selectedStopIndex + 1} Hex Color") },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = PrimaryRed, cursorColor = PrimaryRed)
+                    )
+                }
+
+                // Quick Color Swatches
+                Text("Quick Swatches", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = SecondaryText)
+                val swatches = listOf("#C91F2C", "#A91521", "#E53945", "#000000", "#FFFFFF", "#1E3A8A", "#065F46", "#D97706", "#8B5CF6", "#EC4899")
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    swatches.forEach { hex ->
+                        Surface(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .clickable {
+                                    hexInput = hex
+                                    colors = colors.toMutableList().apply { set(selectedStopIndex, hex) }
+                                },
+                            shape = CircleShape,
+                            color = Color(android.graphics.Color.parseColor(hex)),
+                            border = BorderStroke(1.dp, SubtleBorder)
+                        ) {}
+                    }
+                }
+
+                // Gradient Direction Angle Slider (0° - 360°)
+                Text("Gradient Angle (${angle.toInt()}°)", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MainText)
+                Slider(
+                    value = angle,
+                    onValueChange = { angle = it },
+                    valueRange = 0f..360f,
+                    colors = SliderDefaults.colors(thumbColor = PrimaryRed, activeTrackColor = PrimaryRed)
+                )
+
+                // Quick Angle Chips
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf(0f to "0° (H)", 45f to "45° (Diag)", 90f to "90° (V)", 135f to "135°", 180f to "180°", 270f to "270°").forEach { (a, label) ->
+                        FilterChip(
+                            selected = angle == a,
+                            onClick = { angle = a },
+                            label = { Text(label, fontSize = 10.sp) },
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White)
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onApply(colors, angle) },
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryRed)
+            ) {
+                Text("Apply Gradient")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = MainText)
+            }
+        },
+        containerColor = Color.White,
+        shape = RoundedCornerShape(16.dp)
+    )
+}
+
+@Composable
 private fun LayerRowItem(
     element: TemplateElement,
     index: Int,
@@ -1006,27 +1550,41 @@ private fun LayerRowItem(
     isSelected: Boolean,
     isLocked: Boolean,
     isHidden: Boolean,
+    isDragging: Boolean,
+    offsetY: Float,
     manifest: TemplateManifest,
     state: MagicStoryEditorState,
     context: Context,
     onSelect: () -> Unit,
-    onDragReorder: (Int) -> Unit,
+    onDragStart: () -> Unit,
+    onDrag: (Float) -> Unit,
+    onDragEnd: () -> Unit,
     onToggleLock: () -> Unit,
     onToggleHide: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val density = LocalDensity.current
-    var accumulativeY by remember { mutableFloatStateOf(0f) }
-    val rowHeightPx = with(density) { 64.dp.toPx() }
+    val elevationAnim by animateDpAsState(if (isDragging) 12.dp else 0.dp, label = "elevation")
+    val scaleAnim by animateFloatAsState(if (isDragging) 1.04f else 1.0f, label = "scale")
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .zIndex(if (isDragging) 100f else 0f)
+            .graphicsLayer {
+                translationY = offsetY
+                scaleX = scaleAnim
+                scaleY = scaleAnim
+            }
+            .shadow(elevation = elevationAnim, shape = RoundedCornerShape(12.dp), ambientColor = PrimaryRed, spotColor = PrimaryRed)
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onSelect),
         shape = RoundedCornerShape(12.dp),
-        color = if (isSelected) PrimaryRed.copy(alpha = 0.12f) else SecondaryBackground,
-        border = BorderStroke(1.5.dp, if (isSelected) PrimaryRed else SubtleBorder)
+        color = when {
+            isDragging -> PrimaryRed.copy(alpha = 0.22f)
+            isSelected -> PrimaryRed.copy(alpha = 0.12f)
+            else -> SecondaryBackground
+        },
+        border = BorderStroke(if (isDragging) 2.dp else 1.5.dp, if (isDragging || isSelected) PrimaryRed else SubtleBorder)
     ) {
         Row(
             modifier = Modifier
@@ -1040,18 +1598,13 @@ private fun LayerRowItem(
                     .size(36.dp)
                     .pointerInput(element.id) {
                         detectDragGestures(
-                            onDragStart = { accumulativeY = 0f },
+                            onDragStart = { onDragStart() },
                             onDrag = { change, dragAmount ->
                                 change.consume()
-                                accumulativeY += dragAmount.y
-                                val steps = (accumulativeY / rowHeightPx).toInt()
-                                if (steps != 0) {
-                                    onDragReorder(steps)
-                                    accumulativeY -= steps * rowHeightPx
-                                }
+                                onDrag(dragAmount.y)
                             },
-                            onDragEnd = { accumulativeY = 0f },
-                            onDragCancel = { accumulativeY = 0f }
+                            onDragEnd = { onDragEnd() },
+                            onDragCancel = { onDragEnd() }
                         )
                     },
                 contentAlignment = Alignment.Center
@@ -1059,8 +1612,8 @@ private fun LayerRowItem(
                 Icon(
                     imageVector = Icons.Default.DragHandle,
                     contentDescription = "Drag to reorder layer",
-                    tint = SecondaryText,
-                    modifier = Modifier.size(22.dp)
+                    tint = if (isDragging) PrimaryRed else SecondaryText,
+                    modifier = Modifier.size(24.dp)
                 )
             }
 
@@ -1134,16 +1687,18 @@ private fun LayerRowItem(
                     )
                 }
 
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        tint = PrimaryRed,
-                        modifier = Modifier.size(18.dp)
-                    )
+                if (element !is TemplateElement.Background) {
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = PrimaryRed,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }
@@ -1165,6 +1720,7 @@ private fun getPhotoSlotId(element: TemplateElement?, selectedId: String): Strin
 
 private fun getElementLabel(element: TemplateElement?, selectedId: String): String {
     return when (element) {
+        is TemplateElement.Background -> "Background Layer"
         is TemplateElement.Text -> element.label ?: "Text Element"
         is TemplateElement.PhotoSlot -> element.label ?: "Image Frame"
         is TemplateElement.PhotoCard -> if (selectedId == element.captionId) "Card Caption" else "Photo Card Element"

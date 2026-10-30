@@ -52,6 +52,7 @@ class EditorViewModel(
                     textCases = emptyMap(),
                     textBgColors = emptyMap(),
                     textShadowColors = emptyMap(),
+                    textFontFamilies = emptyMap(),
                     customFontUris = emptyMap(),
                     lockedElementIds = emptySet(),
                     hiddenElementIds = emptySet(),
@@ -59,6 +60,7 @@ class EditorViewModel(
                     bgGradientColors = null,
                     bgGradientAngle = 0f,
                     bgTextureType = "NONE",
+                    elementGradients = emptyMap(),
                     deletedElementIds = emptySet()
                 )
                 _state.value = MagicStoryEditorState(
@@ -101,6 +103,7 @@ class EditorViewModel(
             currentState.textCases,
             currentState.textBgColors,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             newLocked,
             currentState.hiddenElementIds,
@@ -108,6 +111,7 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             currentState.bgTextureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
         )
     }
@@ -135,6 +139,7 @@ class EditorViewModel(
             currentState.textCases,
             currentState.textBgColors,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             newHidden,
@@ -142,6 +147,7 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             currentState.bgTextureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
         )
     }
@@ -187,6 +193,7 @@ class EditorViewModel(
             currentState.textCases,
             currentState.textBgColors,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
@@ -194,6 +201,7 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             currentState.bgTextureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
         )
     }
@@ -239,6 +247,7 @@ class EditorViewModel(
             currentState.textCases,
             currentState.textBgColors,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
@@ -246,6 +255,7 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             currentState.bgTextureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
         )
     }
@@ -269,6 +279,7 @@ class EditorViewModel(
             currentState.textCases,
             currentState.textBgColors,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
@@ -276,7 +287,55 @@ class EditorViewModel(
             colors,
             angle,
             currentState.bgTextureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
+        )
+    }
+
+    fun updateElementGradient(elementId: String, colors: List<String>?, angle: Float) {
+        val currentState = _state.value ?: return
+        val newGradients = currentState.elementGradients.toMutableMap().apply {
+            if (colors == null) remove(elementId) else put(elementId, Pair(colors, angle))
+        }
+
+        pushState(
+            currentState,
+            currentState.editedTexts,
+            currentState.photoUris,
+            currentState.elementPositions,
+            currentState.elementSizes,
+            currentState.elementRotations,
+            currentState.elementFlips,
+            currentState.textFontSizes,
+            currentState.textColors,
+            currentState.textFontWeights,
+            currentState.textAlignments,
+            currentState.textLetterSpacings,
+            currentState.textLineSpacings,
+            currentState.textCases,
+            currentState.textBgColors,
+            currentState.textShadowColors,
+            currentState.textFontFamilies,
+            currentState.customFontUris,
+            currentState.lockedElementIds,
+            currentState.hiddenElementIds,
+            currentState.elementZOrders,
+            currentState.bgGradientColors,
+            currentState.bgGradientAngle,
+            currentState.bgTextureType,
+            newGradients,
+            currentState.deletedElementIds
+        )
+    }
+
+    fun setEyedropperActive(active: Boolean) {
+        _state.value = _state.value?.copy(isEyedropperActive = active)
+    }
+
+    fun updateEyedropperSample(colorHex: String?, touchX: Float = 0f, touchY: Float = 0f) {
+        _state.value = _state.value?.copy(
+            eyedropperSampledColor = colorHex,
+            eyedropperTouchPos = Pair(touchX, touchY)
         )
     }
 
@@ -299,6 +358,7 @@ class EditorViewModel(
             currentState.textCases,
             currentState.textBgColors,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
@@ -306,6 +366,7 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             textureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
         )
     }
@@ -334,6 +395,7 @@ class EditorViewModel(
             currentState.textCases,
             currentState.textBgColors,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
@@ -341,6 +403,7 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             currentState.bgTextureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
         )
     }
@@ -369,6 +432,7 @@ class EditorViewModel(
             currentState.textCases,
             currentState.textBgColors,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
@@ -376,6 +440,7 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             currentState.bgTextureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
         )
     }
@@ -403,6 +468,7 @@ class EditorViewModel(
             currentState.textCases,
             currentState.textBgColors,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
@@ -410,6 +476,7 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             currentState.bgTextureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
         )
     }
@@ -437,6 +504,7 @@ class EditorViewModel(
             currentState.textCases,
             currentState.textBgColors,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
@@ -444,6 +512,7 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             currentState.bgTextureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
         )
     }
@@ -514,6 +583,7 @@ class EditorViewModel(
             currentState.textCases,
             currentState.textBgColors,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
@@ -521,6 +591,43 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             currentState.bgTextureType,
+            currentState.elementGradients,
+            currentState.deletedElementIds
+        )
+    }
+
+    fun updateFontFamily(elementId: String, fontFamily: String) {
+        val currentState = _state.value ?: return
+        val newFonts = currentState.textFontFamilies.toMutableMap().apply {
+            put(elementId, fontFamily)
+        }
+
+        pushState(
+            currentState,
+            currentState.editedTexts,
+            currentState.photoUris,
+            currentState.elementPositions,
+            currentState.elementSizes,
+            currentState.elementRotations,
+            currentState.elementFlips,
+            currentState.textFontSizes,
+            currentState.textColors,
+            currentState.textFontWeights,
+            currentState.textAlignments,
+            currentState.textLetterSpacings,
+            currentState.textLineSpacings,
+            currentState.textCases,
+            currentState.textBgColors,
+            currentState.textShadowColors,
+            newFonts,
+            currentState.customFontUris,
+            currentState.lockedElementIds,
+            currentState.hiddenElementIds,
+            currentState.elementZOrders,
+            currentState.bgGradientColors,
+            currentState.bgGradientAngle,
+            currentState.bgTextureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
         )
     }
@@ -548,6 +655,7 @@ class EditorViewModel(
             currentState.textCases,
             currentState.textBgColors,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
@@ -555,6 +663,7 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             currentState.bgTextureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
         )
     }
@@ -582,6 +691,7 @@ class EditorViewModel(
             currentState.textCases,
             currentState.textBgColors,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
@@ -589,6 +699,7 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             currentState.bgTextureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
         )
     }
@@ -616,6 +727,7 @@ class EditorViewModel(
             currentState.textCases,
             currentState.textBgColors,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
@@ -623,6 +735,7 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             currentState.bgTextureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
         )
     }
@@ -650,6 +763,7 @@ class EditorViewModel(
             currentState.textCases,
             currentState.textBgColors,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
@@ -657,6 +771,7 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             currentState.bgTextureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
         )
     }
@@ -684,6 +799,7 @@ class EditorViewModel(
             currentState.textCases,
             currentState.textBgColors,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
@@ -691,6 +807,7 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             currentState.bgTextureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
         )
     }
@@ -724,6 +841,7 @@ class EditorViewModel(
             newCases,
             currentState.textBgColors,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
@@ -731,6 +849,7 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             currentState.bgTextureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
         )
     }
@@ -758,6 +877,7 @@ class EditorViewModel(
             currentState.textCases,
             newBgs,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
@@ -765,6 +885,7 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             currentState.bgTextureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
         )
     }
@@ -792,6 +913,7 @@ class EditorViewModel(
             currentState.textCases,
             currentState.textBgColors,
             newShadows,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
@@ -799,6 +921,7 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             currentState.bgTextureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
         )
     }
@@ -830,6 +953,7 @@ class EditorViewModel(
             currentState.textCases,
             currentState.textBgColors,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
@@ -837,6 +961,7 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             currentState.bgTextureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
         )
     }
@@ -888,6 +1013,7 @@ class EditorViewModel(
             currentState.textCases,
             currentState.textBgColors,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
@@ -895,6 +1021,7 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             currentState.bgTextureType,
+            currentState.elementGradients,
             currentState.deletedElementIds
         )
 
@@ -924,6 +1051,7 @@ class EditorViewModel(
             currentState.textCases,
             currentState.textBgColors,
             currentState.textShadowColors,
+            currentState.textFontFamilies,
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
@@ -931,6 +1059,7 @@ class EditorViewModel(
             currentState.bgGradientColors,
             currentState.bgGradientAngle,
             currentState.bgTextureType,
+            currentState.elementGradients,
             newDeleted
         )
 
@@ -958,6 +1087,7 @@ class EditorViewModel(
         newCases: Map<String, String>,
         newTextBgs: Map<String, String>,
         newTextShadows: Map<String, String>,
+        newFontFamilies: Map<String, String>,
         newCustomFonts: Map<String, String>,
         newLocked: Set<String>,
         newHidden: Set<String>,
@@ -965,6 +1095,7 @@ class EditorViewModel(
         newBgGradientColors: List<String>?,
         newBgGradientAngle: Float,
         newBgTexture: String,
+        newGradients: Map<String, Pair<List<String>, Float>>,
         newDeleted: Set<String>
     ) {
         val newSnapshot = EditorSnapshot(
@@ -983,6 +1114,7 @@ class EditorViewModel(
             textCases = newCases,
             textBgColors = newTextBgs,
             textShadowColors = newTextShadows,
+            textFontFamilies = newFontFamilies,
             customFontUris = newCustomFonts,
             lockedElementIds = newLocked,
             hiddenElementIds = newHidden,
@@ -990,6 +1122,7 @@ class EditorViewModel(
             bgGradientColors = newBgGradientColors,
             bgGradientAngle = newBgGradientAngle,
             bgTextureType = newBgTexture,
+            elementGradients = newGradients,
             deletedElementIds = newDeleted
         )
         val trimmedHistory = currentState.history.take(currentState.historyIndex + 1) + newSnapshot
@@ -1010,6 +1143,7 @@ class EditorViewModel(
             textCases = newCases,
             textBgColors = newTextBgs,
             textShadowColors = newTextShadows,
+            textFontFamilies = newFontFamilies,
             customFontUris = newCustomFonts,
             lockedElementIds = newLocked,
             hiddenElementIds = newHidden,
@@ -1017,6 +1151,7 @@ class EditorViewModel(
             bgGradientColors = newBgGradientColors,
             bgGradientAngle = newBgGradientAngle,
             bgTextureType = newBgTexture,
+            elementGradients = newGradients,
             deletedElementIds = newDeleted,
             history = trimmedHistory,
             historyIndex = trimmedHistory.size - 1
@@ -1044,6 +1179,7 @@ class EditorViewModel(
                 textCases = prevSnapshot.textCases,
                 textBgColors = prevSnapshot.textBgColors,
                 textShadowColors = prevSnapshot.textShadowColors,
+                textFontFamilies = prevSnapshot.textFontFamilies,
                 customFontUris = prevSnapshot.customFontUris,
                 lockedElementIds = prevSnapshot.lockedElementIds,
                 hiddenElementIds = prevSnapshot.hiddenElementIds,
@@ -1051,6 +1187,7 @@ class EditorViewModel(
                 bgGradientColors = prevSnapshot.bgGradientColors,
                 bgGradientAngle = prevSnapshot.bgGradientAngle,
                 bgTextureType = prevSnapshot.bgTextureType,
+                elementGradients = prevSnapshot.elementGradients,
                 deletedElementIds = prevSnapshot.deletedElementIds,
                 historyIndex = prevIndex
             )
@@ -1078,6 +1215,7 @@ class EditorViewModel(
                 textCases = nextSnapshot.textCases,
                 textBgColors = nextSnapshot.textBgColors,
                 textShadowColors = nextSnapshot.textShadowColors,
+                textFontFamilies = nextSnapshot.textFontFamilies,
                 customFontUris = nextSnapshot.customFontUris,
                 lockedElementIds = nextSnapshot.lockedElementIds,
                 hiddenElementIds = nextSnapshot.hiddenElementIds,
@@ -1085,6 +1223,7 @@ class EditorViewModel(
                 bgGradientColors = nextSnapshot.bgGradientColors,
                 bgGradientAngle = nextSnapshot.bgGradientAngle,
                 bgTextureType = nextSnapshot.bgTextureType,
+                elementGradients = nextSnapshot.elementGradients,
                 deletedElementIds = nextSnapshot.deletedElementIds,
                 historyIndex = nextIndex
             )
@@ -1097,7 +1236,7 @@ class EditorViewModel(
             emptyMap(), emptyMap(), emptyMap(), emptyMap(), emptyMap(),
             emptyMap(), emptyMap(), emptyMap(), emptyMap(), emptyMap(),
             emptyMap(), emptyMap(), emptyMap(), emptyMap(), emptyMap(),
-            emptyMap(), emptySet(), emptySet(), emptyMap(), null, 0f, "NONE", emptySet()
+            emptyMap(), emptyMap(), emptySet(), emptySet(), emptyMap(), null, 0f, "NONE", emptyMap(), emptySet()
         )
         _state.value = currentState.copy(
             editedTexts = emptyMap(),
@@ -1115,6 +1254,7 @@ class EditorViewModel(
             textCases = emptyMap(),
             textBgColors = emptyMap(),
             textShadowColors = emptyMap(),
+            textFontFamilies = emptyMap(),
             customFontUris = emptyMap(),
             lockedElementIds = emptySet(),
             hiddenElementIds = emptySet(),
@@ -1122,6 +1262,7 @@ class EditorViewModel(
             bgGradientColors = null,
             bgGradientAngle = 0f,
             bgTextureType = "NONE",
+            elementGradients = emptyMap(),
             deletedElementIds = emptySet(),
             selectedElementId = null,
             snappingGuideLines = emptyList(),
