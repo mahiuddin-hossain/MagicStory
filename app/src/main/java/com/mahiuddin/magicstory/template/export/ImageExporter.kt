@@ -20,8 +20,11 @@ object ImageExporter {
     ): Result<Uri> = withContext(Dispatchers.IO) {
         runCatching {
             val resolution = editorState.exportResolution
-            val targetWidth = resolution.width
-            val targetHeight = resolution.height
+            val scaleMultiplier = editorState.exportScale.multiplier
+            val exportFormat = editorState.exportFormat
+
+            val targetWidth = (resolution.width * scaleMultiplier).toInt()
+            val targetHeight = (resolution.height * scaleMultiplier).toInt()
 
             val bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
@@ -35,10 +38,11 @@ object ImageExporter {
                 context = context
             )
 
-            val saveResult = MediaStoreUtils.saveBitmapToGallery(
+            val saveResult = MediaStoreUtils.saveExportToGallery(
                 context = context,
                 bitmap = bitmap,
                 filenamePrefix = "MagicStory_${manifest.id}",
+                format = exportFormat,
                 quality = 95
             )
 
