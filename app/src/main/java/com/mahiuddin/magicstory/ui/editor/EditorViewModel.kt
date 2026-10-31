@@ -8,7 +8,9 @@ import com.mahiuddin.magicstory.domain.model.EditorSnapshot
 import com.mahiuddin.magicstory.domain.model.ExportFormat
 import com.mahiuddin.magicstory.domain.model.ExportResolution
 import com.mahiuddin.magicstory.domain.model.ExportScale
+import com.mahiuddin.magicstory.domain.model.GradientConfig
 import com.mahiuddin.magicstory.domain.model.GuideLine
+import com.mahiuddin.magicstory.domain.model.LayerEffectConfig
 import com.mahiuddin.magicstory.domain.model.MagicStoryEditorState
 import com.mahiuddin.magicstory.domain.model.TemplateElement
 import com.mahiuddin.magicstory.domain.repository.TemplateRepository
@@ -57,10 +59,12 @@ class EditorViewModel(
                     lockedElementIds = emptySet(),
                     hiddenElementIds = emptySet(),
                     elementZOrders = emptyMap(),
-                    bgGradientColors = null,
-                    bgGradientAngle = 0f,
+                    bgGradientConfig = null,
                     bgTextureType = "NONE",
                     elementGradients = emptyMap(),
+                    elementStrokes = emptyMap(),
+                    elementOpacities = emptyMap(),
+                    elementEffects = emptyMap(),
                     deletedElementIds = emptySet()
                 )
                 _state.value = MagicStoryEditorState(
@@ -108,10 +112,12 @@ class EditorViewModel(
             newLocked,
             currentState.hiddenElementIds,
             currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
     }
@@ -144,10 +150,12 @@ class EditorViewModel(
             currentState.lockedElementIds,
             newHidden,
             currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
     }
@@ -198,10 +206,12 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             newZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
     }
@@ -252,16 +262,24 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             newZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
     }
 
-    fun updateBgGradient(colors: List<String>?, angle: Float) {
+    fun updateElementGradient(elementId: String, config: GradientConfig?) {
         val currentState = _state.value ?: return
+        val newGradients = currentState.elementGradients.toMutableMap().apply {
+            if (config == null) remove(elementId) else put(elementId, config)
+        }
+
+        val isBg = elementId == "bg" || currentState.template.elements.find { it.id == elementId } is TemplateElement.Background
+
         pushState(
             currentState,
             currentState.editedTexts,
@@ -284,18 +302,68 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             currentState.elementZOrders,
-            colors,
-            angle,
+            if (isBg) config else currentState.bgGradientConfig,
             currentState.bgTextureType,
-            currentState.elementGradients,
+            newGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
     }
 
-    fun updateElementGradient(elementId: String, colors: List<String>?, angle: Float) {
+    fun updateBgGradient(colors: List<String>?, angle: Float) {
+        val config = if (colors != null) GradientConfig(colors = colors, angle = angle) else null
+        updateElementGradient("bg", config)
+    }
+
+    fun updateTextColor(elementId: String, colorHex: String) {
         val currentState = _state.value ?: return
+        val newColors = currentState.textColors.toMutableMap().apply {
+            put(elementId, colorHex)
+        }
         val newGradients = currentState.elementGradients.toMutableMap().apply {
-            if (colors == null) remove(elementId) else put(elementId, Pair(colors, angle))
+            remove(elementId)
+        }
+
+        val isBg = elementId == "bg" || currentState.template.elements.find { it.id == elementId } is TemplateElement.Background
+
+        pushState(
+            currentState,
+            currentState.editedTexts,
+            currentState.photoUris,
+            currentState.elementPositions,
+            currentState.elementSizes,
+            currentState.elementRotations,
+            currentState.elementFlips,
+            currentState.textFontSizes,
+            newColors,
+            currentState.textFontWeights,
+            currentState.textAlignments,
+            currentState.textLetterSpacings,
+            currentState.textLineSpacings,
+            currentState.textCases,
+            currentState.textBgColors,
+            currentState.textShadowColors,
+            currentState.textFontFamilies,
+            currentState.customFontUris,
+            currentState.lockedElementIds,
+            currentState.hiddenElementIds,
+            currentState.elementZOrders,
+            if (isBg) null else currentState.bgGradientConfig,
+            currentState.bgTextureType,
+            newGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
+            currentState.deletedElementIds
+        )
+    }
+
+    fun updateElementStroke(elementId: String, colorHex: String?, strokeWidthDp: Float) {
+        val currentState = _state.value ?: return
+        val newStrokes = currentState.elementStrokes.toMutableMap().apply {
+            if (colorHex == null || strokeWidthDp <= 0f) remove(elementId) else put(elementId, Pair(colorHex, strokeWidthDp))
         }
 
         pushState(
@@ -320,12 +388,217 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
-            newGradients,
+            currentState.elementGradients,
+            newStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
+    }
+
+    fun updateElementOpacity(elementId: String, opacity: Float) {
+        val currentState = _state.value ?: return
+        val newOpacities = currentState.elementOpacities.toMutableMap().apply {
+            put(elementId, opacity.coerceIn(0f, 1f))
+        }
+
+        pushState(
+            currentState,
+            currentState.editedTexts,
+            currentState.photoUris,
+            currentState.elementPositions,
+            currentState.elementSizes,
+            currentState.elementRotations,
+            currentState.elementFlips,
+            currentState.textFontSizes,
+            currentState.textColors,
+            currentState.textFontWeights,
+            currentState.textAlignments,
+            currentState.textLetterSpacings,
+            currentState.textLineSpacings,
+            currentState.textCases,
+            currentState.textBgColors,
+            currentState.textShadowColors,
+            currentState.textFontFamilies,
+            currentState.customFontUris,
+            currentState.lockedElementIds,
+            currentState.hiddenElementIds,
+            currentState.elementZOrders,
+            currentState.bgGradientConfig,
+            currentState.bgTextureType,
+            currentState.elementGradients,
+            currentState.elementStrokes,
+            newOpacities,
+            currentState.elementEffects,
+            currentState.deletedElementIds
+        )
+    }
+
+    fun updateDropShadow(
+        elementId: String,
+        colorHex: String?,
+        radiusDp: Float = 12f,
+        angleDeg: Float = 45f,
+        distanceDp: Float = 8f,
+        spreadDp: Float = 0f,
+        opacity: Float = 0.6f
+    ) {
+        val currentState = _state.value ?: return
+        val currentEffect = currentState.getLayerEffect(elementId)
+        val newEffect = currentEffect.copy(
+            dropShadowColor = colorHex,
+            dropShadowRadius = radiusDp,
+            dropShadowAngle = angleDeg,
+            dropShadowDistance = distanceDp,
+            dropShadowSpread = spreadDp,
+            dropShadowOpacity = opacity
+        )
+        val newEffects = currentState.elementEffects.toMutableMap().apply {
+            put(elementId, newEffect)
+        }
+
+        pushState(
+            currentState,
+            currentState.editedTexts,
+            currentState.photoUris,
+            currentState.elementPositions,
+            currentState.elementSizes,
+            currentState.elementRotations,
+            currentState.elementFlips,
+            currentState.textFontSizes,
+            currentState.textColors,
+            currentState.textFontWeights,
+            currentState.textAlignments,
+            currentState.textLetterSpacings,
+            currentState.textLineSpacings,
+            currentState.textCases,
+            currentState.textBgColors,
+            currentState.textShadowColors,
+            currentState.textFontFamilies,
+            currentState.customFontUris,
+            currentState.lockedElementIds,
+            currentState.hiddenElementIds,
+            currentState.elementZOrders,
+            currentState.bgGradientConfig,
+            currentState.bgTextureType,
+            currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            newEffects,
+            currentState.deletedElementIds
+        )
+    }
+
+    fun updateOuterGlow(
+        elementId: String,
+        colorHex: String?,
+        radiusDp: Float = 16f,
+        spreadDp: Float = 4f,
+        opacity: Float = 0.8f
+    ) {
+        val currentState = _state.value ?: return
+        val currentEffect = currentState.getLayerEffect(elementId)
+        val newEffect = currentEffect.copy(
+            outerGlowColor = colorHex,
+            outerGlowRadius = radiusDp,
+            outerGlowSpread = spreadDp,
+            outerGlowOpacity = opacity
+        )
+        val newEffects = currentState.elementEffects.toMutableMap().apply {
+            put(elementId, newEffect)
+        }
+
+        pushState(
+            currentState,
+            currentState.editedTexts,
+            currentState.photoUris,
+            currentState.elementPositions,
+            currentState.elementSizes,
+            currentState.elementRotations,
+            currentState.elementFlips,
+            currentState.textFontSizes,
+            currentState.textColors,
+            currentState.textFontWeights,
+            currentState.textAlignments,
+            currentState.textLetterSpacings,
+            currentState.textLineSpacings,
+            currentState.textCases,
+            currentState.textBgColors,
+            currentState.textShadowColors,
+            currentState.textFontFamilies,
+            currentState.customFontUris,
+            currentState.lockedElementIds,
+            currentState.hiddenElementIds,
+            currentState.elementZOrders,
+            currentState.bgGradientConfig,
+            currentState.bgTextureType,
+            currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            newEffects,
+            currentState.deletedElementIds
+        )
+    }
+
+    fun updateInnerGlow(
+        elementId: String,
+        colorHex: String?,
+        radiusDp: Float = 12f,
+        chokeDp: Float = 2f,
+        opacity: Float = 0.7f,
+        source: String = "EDGE"
+    ) {
+        val currentState = _state.value ?: return
+        val currentEffect = currentState.getLayerEffect(elementId)
+        val newEffect = currentEffect.copy(
+            innerGlowColor = colorHex,
+            innerGlowRadius = radiusDp,
+            innerGlowChoke = chokeDp,
+            innerGlowOpacity = opacity,
+            innerGlowSource = source
+        )
+        val newEffects = currentState.elementEffects.toMutableMap().apply {
+            put(elementId, newEffect)
+        }
+
+        pushState(
+            currentState,
+            currentState.editedTexts,
+            currentState.photoUris,
+            currentState.elementPositions,
+            currentState.elementSizes,
+            currentState.elementRotations,
+            currentState.elementFlips,
+            currentState.textFontSizes,
+            currentState.textColors,
+            currentState.textFontWeights,
+            currentState.textAlignments,
+            currentState.textLetterSpacings,
+            currentState.textLineSpacings,
+            currentState.textCases,
+            currentState.textBgColors,
+            currentState.textShadowColors,
+            currentState.textFontFamilies,
+            currentState.customFontUris,
+            currentState.lockedElementIds,
+            currentState.hiddenElementIds,
+            currentState.elementZOrders,
+            currentState.bgGradientConfig,
+            currentState.bgTextureType,
+            currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            newEffects,
+            currentState.deletedElementIds
+        )
+    }
+
+    fun addSavedSwatch(colorHex: String) {
+        val currentState = _state.value ?: return
+        val newSwatches = (listOf(colorHex) + currentState.savedSwatches).distinct().take(15)
+        _state.value = currentState.copy(savedSwatches = newSwatches)
     }
 
     fun setEyedropperActive(active: Boolean) {
@@ -363,10 +636,12 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             textureType,
             currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
     }
@@ -400,10 +675,12 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
     }
@@ -437,10 +714,12 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
     }
@@ -473,10 +752,12 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
     }
@@ -509,10 +790,12 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
     }
@@ -588,10 +871,12 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
     }
@@ -624,46 +909,12 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
-            currentState.deletedElementIds
-        )
-    }
-
-    fun updateTextColor(elementId: String, colorHex: String) {
-        val currentState = _state.value ?: return
-        val newColors = currentState.textColors.toMutableMap().apply {
-            put(elementId, colorHex)
-        }
-
-        pushState(
-            currentState,
-            currentState.editedTexts,
-            currentState.photoUris,
-            currentState.elementPositions,
-            currentState.elementSizes,
-            currentState.elementRotations,
-            currentState.elementFlips,
-            currentState.textFontSizes,
-            newColors,
-            currentState.textFontWeights,
-            currentState.textAlignments,
-            currentState.textLetterSpacings,
-            currentState.textLineSpacings,
-            currentState.textCases,
-            currentState.textBgColors,
-            currentState.textShadowColors,
-            currentState.textFontFamilies,
-            currentState.customFontUris,
-            currentState.lockedElementIds,
-            currentState.hiddenElementIds,
-            currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
-            currentState.bgTextureType,
-            currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
     }
@@ -696,10 +947,12 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
     }
@@ -732,10 +985,12 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
     }
@@ -768,10 +1023,12 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
     }
@@ -804,10 +1061,12 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
     }
@@ -846,10 +1105,12 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
     }
@@ -882,10 +1143,12 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
     }
@@ -918,10 +1181,12 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
     }
@@ -958,10 +1223,12 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
     }
@@ -1018,10 +1285,12 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             currentState.deletedElementIds
         )
 
@@ -1056,10 +1325,12 @@ class EditorViewModel(
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
             currentState.elementZOrders,
-            currentState.bgGradientColors,
-            currentState.bgGradientAngle,
+            currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
             newDeleted
         )
 
@@ -1092,10 +1363,12 @@ class EditorViewModel(
         newLocked: Set<String>,
         newHidden: Set<String>,
         newZOrders: Map<String, Int>,
-        newBgGradientColors: List<String>?,
-        newBgGradientAngle: Float,
+        newBgGradientConfig: GradientConfig?,
         newBgTexture: String,
-        newGradients: Map<String, Pair<List<String>, Float>>,
+        newGradients: Map<String, GradientConfig>,
+        newStrokes: Map<String, Pair<String, Float>>,
+        newOpacities: Map<String, Float>,
+        newEffects: Map<String, LayerEffectConfig>,
         newDeleted: Set<String>
     ) {
         val newSnapshot = EditorSnapshot(
@@ -1119,10 +1392,12 @@ class EditorViewModel(
             lockedElementIds = newLocked,
             hiddenElementIds = newHidden,
             elementZOrders = newZOrders,
-            bgGradientColors = newBgGradientColors,
-            bgGradientAngle = newBgGradientAngle,
+            bgGradientConfig = newBgGradientConfig,
             bgTextureType = newBgTexture,
             elementGradients = newGradients,
+            elementStrokes = newStrokes,
+            elementOpacities = newOpacities,
+            elementEffects = newEffects,
             deletedElementIds = newDeleted
         )
         val trimmedHistory = currentState.history.take(currentState.historyIndex + 1) + newSnapshot
@@ -1148,10 +1423,12 @@ class EditorViewModel(
             lockedElementIds = newLocked,
             hiddenElementIds = newHidden,
             elementZOrders = newZOrders,
-            bgGradientColors = newBgGradientColors,
-            bgGradientAngle = newBgGradientAngle,
+            bgGradientConfig = newBgGradientConfig,
             bgTextureType = newBgTexture,
             elementGradients = newGradients,
+            elementStrokes = newStrokes,
+            elementOpacities = newOpacities,
+            elementEffects = newEffects,
             deletedElementIds = newDeleted,
             history = trimmedHistory,
             historyIndex = trimmedHistory.size - 1
@@ -1184,10 +1461,12 @@ class EditorViewModel(
                 lockedElementIds = prevSnapshot.lockedElementIds,
                 hiddenElementIds = prevSnapshot.hiddenElementIds,
                 elementZOrders = prevSnapshot.elementZOrders,
-                bgGradientColors = prevSnapshot.bgGradientColors,
-                bgGradientAngle = prevSnapshot.bgGradientAngle,
+                bgGradientConfig = prevSnapshot.bgGradientConfig,
                 bgTextureType = prevSnapshot.bgTextureType,
                 elementGradients = prevSnapshot.elementGradients,
+                elementStrokes = prevSnapshot.elementStrokes,
+                elementOpacities = prevSnapshot.elementOpacities,
+                elementEffects = prevSnapshot.elementEffects,
                 deletedElementIds = prevSnapshot.deletedElementIds,
                 historyIndex = prevIndex
             )
@@ -1220,10 +1499,12 @@ class EditorViewModel(
                 lockedElementIds = nextSnapshot.lockedElementIds,
                 hiddenElementIds = nextSnapshot.hiddenElementIds,
                 elementZOrders = nextSnapshot.elementZOrders,
-                bgGradientColors = nextSnapshot.bgGradientColors,
-                bgGradientAngle = nextSnapshot.bgGradientAngle,
+                bgGradientConfig = nextSnapshot.bgGradientConfig,
                 bgTextureType = nextSnapshot.bgTextureType,
                 elementGradients = nextSnapshot.elementGradients,
+                elementStrokes = nextSnapshot.elementStrokes,
+                elementOpacities = nextSnapshot.elementOpacities,
+                elementEffects = nextSnapshot.elementEffects,
                 deletedElementIds = nextSnapshot.deletedElementIds,
                 historyIndex = nextIndex
             )
@@ -1236,7 +1517,7 @@ class EditorViewModel(
             emptyMap(), emptyMap(), emptyMap(), emptyMap(), emptyMap(),
             emptyMap(), emptyMap(), emptyMap(), emptyMap(), emptyMap(),
             emptyMap(), emptyMap(), emptyMap(), emptyMap(), emptyMap(),
-            emptyMap(), emptyMap(), emptySet(), emptySet(), emptyMap(), null, 0f, "NONE", emptyMap(), emptySet()
+            emptyMap(), emptyMap(), emptySet(), emptySet(), emptyMap(), null, "NONE", emptyMap(), emptyMap(), emptyMap(), emptyMap(), emptySet()
         )
         _state.value = currentState.copy(
             editedTexts = emptyMap(),
@@ -1259,10 +1540,12 @@ class EditorViewModel(
             lockedElementIds = emptySet(),
             hiddenElementIds = emptySet(),
             elementZOrders = emptyMap(),
-            bgGradientColors = null,
-            bgGradientAngle = 0f,
+            bgGradientConfig = null,
             bgTextureType = "NONE",
             elementGradients = emptyMap(),
+            elementStrokes = emptyMap(),
+            elementOpacities = emptyMap(),
+            elementEffects = emptyMap(),
             deletedElementIds = emptySet(),
             selectedElementId = null,
             snappingGuideLines = emptyList(),

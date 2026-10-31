@@ -7,12 +7,17 @@ import android.graphics.Color
 import android.graphics.DashPathEffect
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
+import android.graphics.SweepGradient
 import android.graphics.Typeface
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
+import com.mahiuddin.magicstory.domain.model.GradientConfig
+import com.mahiuddin.magicstory.domain.model.LayerEffectConfig
 import com.mahiuddin.magicstory.domain.model.MagicStoryEditorState
 import com.mahiuddin.magicstory.domain.model.TemplateElement
 import com.mahiuddin.magicstory.domain.model.TemplateManifest
@@ -39,9 +44,10 @@ object TemplateRenderer {
         sortedElements.forEach { element ->
             if (editorState.isElementDeleted(element.id)) return@forEach
 
+            val opacity = editorState.getElementOpacity(element.id, element.opacity)
             canvas.save()
-            if (element.opacity < 1.0f) {
-                val alpha = (element.opacity * 255).toInt().coerceIn(0, 255)
+            if (opacity < 1.0f) {
+                val alpha = (opacity * 255).toInt().coerceIn(0, 255)
                 canvas.saveLayerAlpha(0f, 0f, width, height, alpha)
             }
 
@@ -54,7 +60,7 @@ object TemplateRenderer {
                 is TemplateElement.PillCta -> renderPillCta(canvas, width, height, element, manifest, editorState, scaleFactor)
             }
 
-            if (element.opacity < 1.0f) {
+            if (opacity < 1.0f) {
                 canvas.restore()
             }
             canvas.restore()
@@ -122,23 +128,45 @@ object TemplateRenderer {
         canvas.restore()
     }
 
-    private fun createLinearGradientShader(
+    private fun createGradientShader(
         rect: RectF,
-        colorsHex: List<String>,
-        angleDeg: Float
+        config: GradientConfig
     ): Shader {
-        val colorInts = colorsHex.map { safeParseColor(it) }.toIntArray()
-        val rad = Math.toRadians(angleDeg.toDouble())
+        val effectiveColors = if (config.isReversed) config.colors.reversed() else config.colors
+        val colorInts = effectiveColors.map { safeParseColor(it) }.toIntArray()
+        val tileMode = when (config.tileMode.uppercase()) {
+            "MIRROR" -> Shader.TileMode.MIRROR
+            "REPEAT" -> Shader.TileMode.REPEAT
+            else -> Shader.TileMode.CLAMP
+        }
+
         val cx = rect.centerX()
         val cy = rect.centerY()
-        val halfDiag = (rect.width() + rect.height()) / 2f
 
-        val x0 = cx - (Math.cos(rad) * halfDiag).toFloat()
-        val y0 = cy - (Math.sin(rad) * halfDiag).toFloat()
-        val x1 = cx + (Math.cos(rad) * halfDiag).toFloat()
-        val y1 = cy + (Math.sin(rad) * halfDiag).toFloat()
+        return when (config.type.uppercase()) {
+            "RADIAL" -> {
+                val radius = (Math.hypot(rect.width().toDouble(), rect.height().toDouble()) / 2.0).toFloat().coerceAtLeast(10f)
+                RadialGradient(cx, cy, radius, colorInts, null, tileMode)
+            }
+            "SWEEP" -> {
+                SweepGradient(cx, cy, colorInts, null)
+            }
+            else -> {
+                val rad = Math.toRadians(config.angle.toDouble())
+                val halfW = rect.width() / 2f
+                val halfH = rect.height() / 2f
 
-        return LinearGradient(x0, y0, x1, y1, colorInts, null, Shader.TileMode.CLAMP)
+                val dx = (Math.cos(rad) * halfW).toFloat()
+                val dy = (Math.sin(rad) * halfH).toFloat()
+
+                val x0 = cx - dx
+                val y0 = cy - dy
+                val x1 = cx + dx
+                val y1 = cy + dy
+
+                LinearGradient(x0, y0, x1, y1, colorInts, null, tileMode)
+            }
+        }
     }
 
     private fun renderBackground(
@@ -150,13 +178,12 @@ object TemplateRenderer {
         scaleFactor: Float
     ) {
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        val colors = editorState.bgGradientColors ?: bg.gradientColors
-        val angle = editorState.bgGradientAngle
+        val gradConfig = editorState.bgGradientConfig ?: if (!bg.gradientColors.isNullOrEmpty()) GradientConfig(bg.gradientColors, bg.gradientAngle) else null
 
-        if (!colors.isNullOrEmpty() && colors.size >= 2) {
-            paint.shader = createLinearGradientShader(RectF(0f, 0f, canvasW, canvasH), colors, angle)
+        if (gradConfig != null && gradConfig.colors.size >= 2) {
+            paint.shader = createGradientShader(RectF(0f, 0f, canvasW, canvasH), gradConfig)
         } else {
-            paint.color = safeParseColor(bg.color)
+            paint.color = safeParseColor(editorState.getTextColor("bg", bg.color))
         }
         canvas.drawRect(0f, 0f, canvasW, canvasH, paint)
 
@@ -244,6 +271,9 @@ object TemplateRenderer {
         val centerX = elemX + elemW / 2f
         val centerY = elemY + elemH / 2f
 
+        val rect = RectF(elemX, elemY, elemX + elemW, elemY + elemH)
+        val effect = editorState.getLayerEffect(textElem.id)
+
         canvas.save()
         if (elemRotation != 0f) {
             canvas.rotate(elemRotation, centerX, centerY)
@@ -251,6 +281,9 @@ object TemplateRenderer {
         if (flipX || flipY) {
             canvas.scale(if (flipX) -1f else 1f, if (flipY) -1f else 1f, centerX, centerY)
         }
+
+        // Draw Outer Glow pass
+        drawOuterGlow(canvas, rect, effect, scaleFactor)
 
         // Draw Text Background Pill if configured
         val bgHex = editorState.getTextBgColor(textElem.id)
@@ -272,17 +305,31 @@ object TemplateRenderer {
 
         val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             val customGrad = editorState.getElementGradient(textElem.id)
-            if (customGrad != null && customGrad.first.size >= 2) {
-                shader = createLinearGradientShader(RectF(elemX, elemY, elemX + elemW, elemY + elemH), customGrad.first, customGrad.second)
+            if (customGrad != null && customGrad.colors.size >= 2) {
+                shader = createGradientShader(RectF(elemX, elemY, elemX + elemW, elemY + elemH), customGrad)
             } else {
                 color = safeParseColor(textColor)
             }
             textSize = fontSize * scaleFactor
             this.letterSpacing = letterSpacing
 
-            val shadowHex = editorState.getTextShadowColor(textElem.id)
-            if (!shadowHex.isNullOrBlank()) {
-                setShadowLayer(8f * scaleFactor, 3f * scaleFactor, 3f * scaleFactor, safeParseColor(shadowHex))
+            // Professional Drop Shadow Layer
+            if (effect.dropShadowColor != null && effect.dropShadowRadius > 0f) {
+                val colorInt = safeParseColor(effect.dropShadowColor)
+                val alphaInt = (effect.dropShadowOpacity.coerceIn(0f, 1f) * Color.alpha(colorInt)).toInt().coerceIn(0, 255)
+                val shadowColor = Color.argb(alphaInt, Color.red(colorInt), Color.green(colorInt), Color.blue(colorInt))
+
+                setShadowLayer(
+                    effect.dropShadowRadius * scaleFactor,
+                    effect.dropShadowDx * scaleFactor,
+                    effect.dropShadowDy * scaleFactor,
+                    shadowColor
+                )
+            } else {
+                val shadowHex = editorState.getTextShadowColor(textElem.id)
+                if (!shadowHex.isNullOrBlank()) {
+                    setShadowLayer(8f * scaleFactor, 3f * scaleFactor, 3f * scaleFactor, safeParseColor(shadowHex))
+                }
             }
 
             val style = when (fontWeight.uppercase()) {
@@ -322,10 +369,37 @@ object TemplateRenderer {
         val layoutHeight = staticLayout.height
         val startY = elemY + (elemH - layoutHeight) / 2f
 
+        // Draw Text Stroke Outline if configured
+        val stroke = editorState.getElementStroke(textElem.id)
+        if (stroke != null && stroke.second > 0f) {
+            val strokePaint = TextPaint(textPaint).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = stroke.second * scaleFactor * 2f
+                color = safeParseColor(stroke.first)
+                shader = null
+            }
+
+            val strokeLayout = StaticLayout.Builder.obtain(
+                textValue, 0, textValue.length, strokePaint, elemW.toInt().coerceAtLeast(10)
+            )
+                .setAlignment(alignment)
+                .setLineSpacing(0f, lineSpacing)
+                .setIncludePad(false)
+                .build()
+
+            canvas.save()
+            canvas.translate(elemX, startY)
+            strokeLayout.draw(canvas)
+            canvas.restore()
+        }
+
         canvas.save()
         canvas.translate(elemX, startY)
         staticLayout.draw(canvas)
         canvas.restore()
+
+        // Draw Inner Glow pass
+        drawInnerGlow(canvas, rect, effect, scaleFactor)
 
         val isSelected = !editorState.isExporting && editorState.isElementSelected(textElem.id)
         drawSelectionOutline(canvas, RectF(elemX, elemY, elemX + elemW, elemY + elemH), isSelected, scaleFactor)
@@ -355,6 +429,8 @@ object TemplateRenderer {
         val flipY = editorState.getFlipY(shape.id)
 
         val rect = RectF(x, y, x + w, y + h)
+        val effect = editorState.getLayerEffect(shape.id)
+        val cornerRadius = shape.cornerRadius * scaleFactor
 
         canvas.save()
         if (rotation != 0f) {
@@ -364,9 +440,23 @@ object TemplateRenderer {
             canvas.scale(if (flipX) -1f else 1f, if (flipY) -1f else 1f, rect.centerX(), rect.centerY())
         }
 
+        // Draw Outer Glow
+        drawOuterGlow(canvas, rect, effect, scaleFactor, cornerRadius)
+
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
-        if (shape.shadowColor != null && shape.shadowRadius > 0f) {
+        if (effect.dropShadowColor != null && effect.dropShadowRadius > 0f) {
+            val colorInt = safeParseColor(effect.dropShadowColor)
+            val alphaInt = (effect.dropShadowOpacity.coerceIn(0f, 1f) * Color.alpha(colorInt)).toInt().coerceIn(0, 255)
+            val shadowColor = Color.argb(alphaInt, Color.red(colorInt), Color.green(colorInt), Color.blue(colorInt))
+
+            paint.setShadowLayer(
+                effect.dropShadowRadius * scaleFactor,
+                effect.dropShadowDx * scaleFactor,
+                effect.dropShadowDy * scaleFactor,
+                shadowColor
+            )
+        } else if (shape.shadowColor != null && shape.shadowRadius > 0f) {
             paint.setShadowLayer(
                 shape.shadowRadius * scaleFactor,
                 shape.shadowDx * scaleFactor,
@@ -376,14 +466,12 @@ object TemplateRenderer {
         }
 
         val customGrad = editorState.getElementGradient(shape.id)
-        if (customGrad != null && customGrad.first.size >= 2) {
-            paint.shader = createLinearGradientShader(rect, customGrad.first, customGrad.second)
+        if (customGrad != null && customGrad.colors.size >= 2) {
+            paint.shader = createGradientShader(rect, customGrad)
         } else {
-            paint.color = safeParseColor(shape.color)
+            paint.color = safeParseColor(editorState.getTextColor(shape.id, shape.color))
         }
         paint.style = Paint.Style.FILL
-
-        val cornerRadius = shape.cornerRadius * scaleFactor
 
         when (shape.shapeType.uppercase()) {
             "ROUNDED_RECTANGLE" -> canvas.drawRoundRect(rect, cornerRadius, cornerRadius, paint)
@@ -410,6 +498,9 @@ object TemplateRenderer {
                 canvas.drawRect(rect, strokePaint)
             }
         }
+
+        drawCustomStroke(canvas, rect, shape.id, editorState, scaleFactor, cornerRadius)
+        drawInnerGlow(canvas, rect, effect, scaleFactor, cornerRadius)
 
         val isSelected = !editorState.isExporting && editorState.isElementSelected(shape.id)
         drawSelectionOutline(canvas, rect, isSelected, scaleFactor)
@@ -461,6 +552,8 @@ object TemplateRenderer {
         val flipY = editorState.getFlipY(slot.id)
 
         val destRect = RectF(x, y, x + w, y + h)
+        val effect = editorState.getLayerEffect(slot.id)
+        val cornerRadius = slot.cornerRadius * scaleFactor
 
         val photoUri = editorState.getPhotoUri(slot.id, slot.defaultAsset)
         val bitmap = getOrLoadBitmap(context, photoUri, w.toInt(), h.toInt(), bitmapCache)
@@ -473,9 +566,12 @@ object TemplateRenderer {
             canvas.scale(if (flipX) -1f else 1f, if (flipY) -1f else 1f, destRect.centerX(), destRect.centerY())
         }
 
-        val cornerRadius = slot.cornerRadius * scaleFactor
+        drawOuterGlow(canvas, destRect, effect, scaleFactor, cornerRadius)
         drawDarkGradientPlaceholder(canvas, destRect, cornerRadius)
         BitmapUtils.drawCoverBitmap(canvas, bitmap, destRect, cornerRadius)
+
+        drawCustomStroke(canvas, destRect, slot.id, editorState, scaleFactor, cornerRadius)
+        drawInnerGlow(canvas, destRect, effect, scaleFactor, cornerRadius)
 
         val isSelected = !editorState.isExporting && editorState.isElementSelected(slot.id)
         drawSelectionOutline(canvas, destRect, isSelected, scaleFactor)
@@ -507,6 +603,8 @@ object TemplateRenderer {
         val flipY = editorState.getFlipY(card.id)
 
         val cardRect = RectF(cardX, cardY, cardX + cardW, cardY + cardH)
+        val effect = editorState.getLayerEffect(card.id)
+        val cardCornerRadius = card.cornerRadius * scaleFactor
 
         val centerX = cardRect.centerX()
         val centerY = cardRect.centerY()
@@ -517,10 +615,23 @@ object TemplateRenderer {
             canvas.scale(if (flipX) -1f else 1f, if (flipY) -1f else 1f, centerX, centerY)
         }
 
+        drawOuterGlow(canvas, cardRect, effect, scaleFactor, cardCornerRadius)
+
         val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = safeParseColor(card.backgroundColor)
             style = Paint.Style.FILL
-            if (card.shadowColor != null && card.shadowRadius > 0f) {
+            if (effect.dropShadowColor != null && effect.dropShadowRadius > 0f) {
+                val colorInt = safeParseColor(effect.dropShadowColor)
+                val alphaInt = (effect.dropShadowOpacity.coerceIn(0f, 1f) * Color.alpha(colorInt)).toInt().coerceIn(0, 255)
+                val shadowColor = Color.argb(alphaInt, Color.red(colorInt), Color.green(colorInt), Color.blue(colorInt))
+
+                setShadowLayer(
+                    effect.dropShadowRadius * scaleFactor,
+                    effect.dropShadowDx * scaleFactor,
+                    effect.dropShadowDy * scaleFactor,
+                    shadowColor
+                )
+            } else if (card.shadowColor != null && card.shadowRadius > 0f) {
                 setShadowLayer(
                     card.shadowRadius * scaleFactor,
                     card.shadowDx * scaleFactor,
@@ -529,7 +640,6 @@ object TemplateRenderer {
                 )
             }
         }
-        val cardCornerRadius = card.cornerRadius * scaleFactor
         canvas.drawRoundRect(cardRect, cardCornerRadius, cardCornerRadius, bgPaint)
 
         val photoX = cardX + card.photoSlotRelX * cardW
@@ -575,6 +685,9 @@ object TemplateRenderer {
             canvas.restore()
         }
 
+        drawCustomStroke(canvas, cardRect, card.id, editorState, scaleFactor, cardCornerRadius)
+        drawInnerGlow(canvas, cardRect, effect, scaleFactor, cardCornerRadius)
+
         val isSelected = !editorState.isExporting && (editorState.isElementSelected(card.id) || editorState.isElementSelected(card.photoSlotId))
         drawSelectionOutline(canvas, cardRect, isSelected, scaleFactor)
 
@@ -603,6 +716,8 @@ object TemplateRenderer {
         val flipY = editorState.getFlipY(pillCta.id)
 
         val containerRect = RectF(x, y, x + w, y + h)
+        val effect = editorState.getLayerEffect(pillCta.id)
+        val cornerRadius = pillCta.cornerRadius * scaleFactor
 
         canvas.save()
         if (rotation != 0f) {
@@ -612,7 +727,7 @@ object TemplateRenderer {
             canvas.scale(if (flipX) -1f else 1f, if (flipY) -1f else 1f, containerRect.centerX(), containerRect.centerY())
         }
 
-        val cornerRadius = pillCta.cornerRadius * scaleFactor
+        drawOuterGlow(canvas, containerRect, effect, scaleFactor, cornerRadius)
 
         val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = safeParseColor(pillCta.borderColor)
@@ -653,7 +768,12 @@ object TemplateRenderer {
         val btnRect = RectF(btnX, btnY, btnX + btnW, btnY + btnH)
 
         val btnBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = safeParseColor(pillCta.buttonBgColor)
+            val customGrad = editorState.getElementGradient(pillCta.id)
+            if (customGrad != null && customGrad.colors.size >= 2) {
+                shader = createGradientShader(btnRect, customGrad)
+            } else {
+                color = safeParseColor(pillCta.buttonBgColor)
+            }
             style = Paint.Style.FILL
         }
         val btnCornerRadius = (pillCta.cornerRadius * 0.8f) * scaleFactor
@@ -681,10 +801,146 @@ object TemplateRenderer {
             canvas.restore()
         }
 
+        drawCustomStroke(canvas, containerRect, pillCta.id, editorState, scaleFactor, cornerRadius)
+        drawInnerGlow(canvas, containerRect, effect, scaleFactor, cornerRadius)
+
         val isSelected = !editorState.isExporting && (editorState.isElementSelected(pillCta.id) || editorState.isElementSelected(pillCta.leftTextId) || editorState.isElementSelected(pillCta.buttonTextId))
         drawSelectionOutline(canvas, containerRect, isSelected, scaleFactor)
 
         canvas.restore()
+    }
+
+    private fun drawOuterGlow(
+        canvas: Canvas,
+        rect: RectF,
+        effect: LayerEffectConfig,
+        scaleFactor: Float,
+        cornerRadius: Float = 0f
+    ) {
+        if (effect.outerGlowColor == null || effect.outerGlowRadius <= 0f) return
+
+        val glowColorInt = safeParseColor(effect.outerGlowColor)
+        val alphaInt = (effect.outerGlowOpacity.coerceIn(0f, 1f) * Color.alpha(glowColorInt)).toInt().coerceIn(0, 255)
+        val finalGlowColor = Color.argb(alphaInt, Color.red(glowColorInt), Color.green(glowColorInt), Color.blue(glowColorInt))
+
+        val spreadOffset = effect.outerGlowSpread * scaleFactor
+        val glowRect = RectF(rect).apply {
+            inset(-spreadOffset, -spreadOffset)
+        }
+
+        // Pass 1: Soft outer halo blur
+        val outerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = finalGlowColor
+            style = Paint.Style.FILL
+            setShadowLayer(
+                effect.outerGlowRadius * scaleFactor,
+                0f,
+                0f,
+                finalGlowColor
+            )
+        }
+
+        val effCorner = if (cornerRadius > 0f) cornerRadius + spreadOffset else 0f
+        if (effCorner > 0f) {
+            canvas.drawRoundRect(glowRect, effCorner, effCorner, outerPaint)
+        } else {
+            canvas.drawRect(glowRect, outerPaint)
+        }
+
+        // Pass 2: Intense core spread
+        if (spreadOffset > 0f) {
+            val corePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = finalGlowColor
+                style = Paint.Style.FILL
+                setShadowLayer(
+                    effect.outerGlowRadius * 0.4f * scaleFactor,
+                    0f,
+                    0f,
+                    finalGlowColor
+                )
+            }
+            if (effCorner > 0f) {
+                canvas.drawRoundRect(glowRect, effCorner, effCorner, corePaint)
+            } else {
+                canvas.drawRect(glowRect, corePaint)
+            }
+        }
+    }
+
+    private fun drawInnerGlow(
+        canvas: Canvas,
+        rect: RectF,
+        effect: LayerEffectConfig,
+        scaleFactor: Float,
+        cornerRadius: Float = 0f
+    ) {
+        if (effect.innerGlowColor == null || effect.innerGlowRadius <= 0f) return
+
+        val glowColorInt = safeParseColor(effect.innerGlowColor)
+        val alphaInt = (effect.innerGlowOpacity.coerceIn(0f, 1f) * Color.alpha(glowColorInt)).toInt().coerceIn(0, 255)
+        val finalGlowColor = Color.argb(alphaInt, Color.red(glowColorInt), Color.green(glowColorInt), Color.blue(glowColorInt))
+
+        canvas.save()
+        val clipPath = Path()
+        if (cornerRadius > 0f) {
+            clipPath.addRoundRect(rect, cornerRadius, cornerRadius, Path.Direction.CW)
+        } else {
+            clipPath.addRect(rect, Path.Direction.CW)
+        }
+        canvas.clipPath(clipPath)
+
+        val chokeOffset = effect.innerGlowChoke * scaleFactor
+        val strokeW = (effect.innerGlowRadius + effect.innerGlowChoke) * scaleFactor * 0.8f
+
+        val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = finalGlowColor
+            style = Paint.Style.STROKE
+            strokeWidth = strokeW
+            setShadowLayer(
+                effect.innerGlowRadius * scaleFactor,
+                0f,
+                0f,
+                finalGlowColor
+            )
+        }
+
+        val halfStroke = strokeW / 2f
+        val insetRect = RectF(rect).apply {
+            inset(halfStroke + chokeOffset, halfStroke + chokeOffset)
+        }
+
+        val effCorner = (cornerRadius - halfStroke - chokeOffset).coerceAtLeast(0f)
+        if (effCorner > 0f) {
+            canvas.drawRoundRect(insetRect, effCorner, effCorner, glowPaint)
+        } else {
+            canvas.drawRect(insetRect, glowPaint)
+        }
+        canvas.restore()
+    }
+
+    private fun drawCustomStroke(
+        canvas: Canvas,
+        rect: RectF,
+        elementId: String,
+        editorState: MagicStoryEditorState,
+        scaleFactor: Float,
+        cornerRadius: Float = 0f
+    ) {
+        val stroke = editorState.getElementStroke(elementId) ?: return
+        val (colorHex, widthDp) = stroke
+        if (widthDp <= 0f) return
+
+        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = safeParseColor(colorHex)
+            style = Paint.Style.STROKE
+            strokeWidth = widthDp * scaleFactor
+        }
+
+        if (cornerRadius > 0f) {
+            canvas.drawRoundRect(rect, cornerRadius, cornerRadius, strokePaint)
+        } else {
+            canvas.drawRect(rect, strokePaint)
+        }
     }
 
     private fun drawSelectionOutline(
@@ -738,19 +994,6 @@ object TemplateRenderer {
         canvas.drawCircle(topCenterX, topCenterY, handleRadius * 0.6f, whitePaint)
     }
 
-    private fun getOrLoadBitmap(
-        context: Context,
-        uriString: String?,
-        reqW: Int,
-        reqH: Int,
-        bitmapCache: MutableMap<String, Bitmap>
-    ): Bitmap {
-        val key = uriString ?: "fallback"
-        return bitmapCache.getOrPut(key) {
-            BitmapUtils.loadBitmap(context, uriString, reqW.coerceAtLeast(100), reqH.coerceAtLeast(100))
-        }
-    }
-
     fun sampleColorAt(
         context: Context,
         manifest: TemplateManifest,
@@ -773,6 +1016,19 @@ object TemplateRenderer {
             String.format("#%06X", 0xFFFFFF and pixel)
         } catch (e: Exception) {
             "#C91F2C"
+        }
+    }
+
+    private fun getOrLoadBitmap(
+        context: Context,
+        uriString: String?,
+        reqW: Int,
+        reqH: Int,
+        bitmapCache: MutableMap<String, Bitmap>
+    ): Bitmap {
+        val key = uriString ?: "fallback"
+        return bitmapCache.getOrPut(key) {
+            BitmapUtils.loadBitmap(context, uriString, reqW.coerceAtLeast(100), reqH.coerceAtLeast(100))
         }
     }
 

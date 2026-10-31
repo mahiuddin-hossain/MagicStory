@@ -24,6 +24,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -50,6 +51,8 @@ import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.BorderColor
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Colorize
 import androidx.compose.material.icons.filled.ContentCopy
@@ -69,6 +72,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.SwapVert
@@ -122,6 +126,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -131,6 +136,7 @@ import androidx.compose.ui.zIndex
 import com.mahiuddin.magicstory.domain.model.ExportFormat
 import com.mahiuddin.magicstory.domain.model.ExportResolution
 import com.mahiuddin.magicstory.domain.model.ExportScale
+import com.mahiuddin.magicstory.domain.model.GradientConfig
 import com.mahiuddin.magicstory.domain.model.MagicStoryEditorState
 import com.mahiuddin.magicstory.domain.model.TemplateElement
 import com.mahiuddin.magicstory.domain.model.TemplateManifest
@@ -151,6 +157,9 @@ enum class ActiveSubTool {
     TEXT_COLOR,
     TEXT_SPACING,
     TEXT_BG,
+    STROKE,
+    OPACITY,
+    EFFECTS,
     BG_TEXTURE,
     ROTATE
 }
@@ -177,6 +186,8 @@ fun EditorScreen(
     var showGradientBuilderDialog by remember { mutableStateOf(false) }
     var colorPickerTargetId by remember { mutableStateOf<String?>(null) }
     var colorPickerInputHex by remember { mutableStateOf("#C91F2C") }
+    var colorPickerMode by remember { mutableStateOf("FILL") } // "FILL" or "STROKE" or "SHADOW" or "OUTER_GLOW" or "INNER_GLOW"
+    var effectTab by remember { mutableStateOf("DROP_SHADOW") } // "DROP_SHADOW", "OUTER_GLOW", "INNER_GLOW"
 
     var activeSubTool by remember { mutableStateOf(ActiveSubTool.NONE) }
     var textEditDialogVisible by remember { mutableStateOf(false) }
@@ -310,7 +321,25 @@ fun EditorScreen(
                                             val sampledHex = TemplateRenderer.sampleColorAt(context, state.template, state, normX, normY)
                                             viewModel.updateEyedropperSample(sampledHex, offset.x, offset.y)
                                             awaitRelease()
-                                            viewModel.updateTextColor(activeSelectedId, sampledHex)
+                                            when (colorPickerMode) {
+                                                "STROKE" -> {
+                                                    val curW = state.getElementStroke(activeSelectedId)?.second ?: 4f
+                                                    viewModel.updateElementStroke(activeSelectedId, sampledHex, curW.coerceAtLeast(2f))
+                                                }
+                                                "SHADOW" -> {
+                                                    val curEff = state.getLayerEffect(activeSelectedId)
+                                                    viewModel.updateDropShadow(activeSelectedId, sampledHex, curEff.dropShadowRadius.coerceAtLeast(8f), curEff.dropShadowDx, curEff.dropShadowDy)
+                                                }
+                                                "OUTER_GLOW" -> {
+                                                    val curEff = state.getLayerEffect(activeSelectedId)
+                                                    viewModel.updateOuterGlow(activeSelectedId, sampledHex, curEff.outerGlowRadius.coerceAtLeast(12f))
+                                                }
+                                                "INNER_GLOW" -> {
+                                                    val curEff = state.getLayerEffect(activeSelectedId)
+                                                    viewModel.updateInnerGlow(activeSelectedId, sampledHex, curEff.innerGlowRadius.coerceAtLeast(8f))
+                                                }
+                                                else -> viewModel.updateTextColor(activeSelectedId, sampledHex)
+                                            }
                                             viewModel.setEyedropperActive(false)
                                         }
                                     )
@@ -560,10 +589,7 @@ fun EditorScreen(
                                     }
                                 }
                                 ActiveSubTool.TEXT_COLOR -> {
-                                    val colorPalette = listOf(
-                                        "#000000", "#FFFFFF", "#C91F2C", "#A91521", "#E53945",
-                                        "#211D1E", "#777174", "#FFF7F7", "#1E3A8A", "#065F46", "#D97706", "#8B5CF6"
-                                    )
+                                    val currentElemColor = state.getTextColor(selectedId, "#000000")
                                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Row(
                                             modifier = Modifier
@@ -578,7 +604,10 @@ fun EditorScreen(
                                                 modifier = Modifier
                                                     .size(38.dp)
                                                     .clip(CircleShape)
-                                                    .clickable { viewModel.setEyedropperActive(true) },
+                                                    .clickable {
+                                                        colorPickerMode = "FILL"
+                                                        viewModel.setEyedropperActive(true)
+                                                    },
                                                 shape = CircleShape,
                                                 color = PrimaryRed.copy(alpha = 0.15f),
                                                 border = BorderStroke(1.5.dp, PrimaryRed)
@@ -588,13 +617,15 @@ fun EditorScreen(
                                                 }
                                             }
 
-                                            // Custom Hex Color Wheel Button
+                                            // Custom HSV Color Picker Button (Matching Attached UI)
                                             Surface(
                                                 modifier = Modifier
                                                     .size(38.dp)
                                                     .clip(CircleShape)
                                                     .clickable {
                                                         colorPickerTargetId = selectedId
+                                                        colorPickerInputHex = currentElemColor
+                                                        colorPickerMode = "FILL"
                                                         showColorPickerDialog = true
                                                     },
                                                 shape = CircleShape,
@@ -624,17 +655,318 @@ fun EditorScreen(
                                                 }
                                             }
 
-                                            // Preset Swatches
-                                            colorPalette.forEach { colorHex ->
+                                            // Saved Swatches & Palette
+                                            state.savedSwatches.forEach { colorHex ->
                                                 Surface(
                                                     modifier = Modifier
                                                         .size(36.dp)
                                                         .clip(CircleShape)
                                                         .clickable { viewModel.updateTextColor(selectedId, colorHex) },
                                                     shape = CircleShape,
-                                                    color = Color(android.graphics.Color.parseColor(colorHex)),
+                                                    color = try { Color(android.graphics.Color.parseColor(colorHex)) } catch (_: Exception) { Color.Black },
                                                     border = BorderStroke(1.5.dp, SubtleBorder)
                                                 ) {}
+                                            }
+                                        }
+                                    }
+                                }
+                                ActiveSubTool.STROKE -> {
+                                    val currentStroke = state.getElementStroke(selectedId) ?: Pair("#C91F2C", 0f)
+                                    Column(modifier = Modifier.padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "Stroke Width: ${currentStroke.second.toInt()} dp",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MainText,
+                                                modifier = Modifier.width(130.dp)
+                                            )
+                                            Slider(
+                                                value = currentStroke.second,
+                                                onValueChange = { viewModel.updateElementStroke(selectedId, currentStroke.first, it) },
+                                                valueRange = 0f..30f,
+                                                colors = SliderDefaults.colors(thumbColor = PrimaryRed, activeTrackColor = PrimaryRed),
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .horizontalScroll(rememberScrollState()),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            // Eyedropper Button for Stroke
+                                            Surface(
+                                                modifier = Modifier
+                                                    .size(34.dp)
+                                                    .clip(CircleShape)
+                                                    .clickable {
+                                                        colorPickerMode = "STROKE"
+                                                        viewModel.setEyedropperActive(true)
+                                                    },
+                                                shape = CircleShape,
+                                                color = PrimaryRed.copy(alpha = 0.15f),
+                                                border = BorderStroke(1.5.dp, PrimaryRed)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(imageVector = Icons.Default.Colorize, contentDescription = "Eyedropper Stroke", tint = PrimaryRed, modifier = Modifier.size(18.dp))
+                                                }
+                                            }
+
+                                            // Custom Color Picker Button for Stroke
+                                            Surface(
+                                                modifier = Modifier
+                                                    .size(34.dp)
+                                                    .clip(CircleShape)
+                                                    .clickable {
+                                                        colorPickerTargetId = selectedId
+                                                        colorPickerInputHex = currentStroke.first
+                                                        colorPickerMode = "STROKE"
+                                                        showColorPickerDialog = true
+                                                    },
+                                                shape = CircleShape,
+                                                color = SecondaryBackground,
+                                                border = BorderStroke(1.5.dp, PrimaryRed)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(imageVector = Icons.Default.Palette, contentDescription = "Stroke Color Picker", tint = PrimaryRed, modifier = Modifier.size(18.dp))
+                                                }
+                                            }
+
+                                            // Clear Stroke Button
+                                            Surface(
+                                                modifier = Modifier
+                                                    .size(34.dp)
+                                                    .clip(CircleShape)
+                                                    .clickable { viewModel.updateElementStroke(selectedId, null, 0f) },
+                                                shape = CircleShape,
+                                                color = Color.Transparent,
+                                                border = BorderStroke(1.5.dp, PrimaryRed)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(imageVector = Icons.Default.Close, contentDescription = "Clear Stroke", tint = PrimaryRed, modifier = Modifier.size(18.dp))
+                                                }
+                                            }
+
+                                            // Saved Swatches for Stroke
+                                            state.savedSwatches.forEach { hex ->
+                                                Surface(
+                                                    modifier = Modifier
+                                                        .size(30.dp)
+                                                        .clip(CircleShape)
+                                                        .clickable { viewModel.updateElementStroke(selectedId, hex, currentStroke.second.coerceAtLeast(3f)) },
+                                                    shape = CircleShape,
+                                                    color = try { Color(android.graphics.Color.parseColor(hex)) } catch (_: Exception) { Color.Black },
+                                                    border = BorderStroke(1.dp, SubtleBorder)
+                                                ) {}
+                                            }
+                                        }
+                                    }
+                                }
+                                ActiveSubTool.OPACITY -> {
+                                    val currentOpacity = state.getElementOpacity(selectedId)
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Opacity: ${(currentOpacity * 100).toInt()}%",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp,
+                                            color = MainText,
+                                            modifier = Modifier.width(110.dp)
+                                        )
+                                        Slider(
+                                            value = currentOpacity,
+                                            onValueChange = { viewModel.updateElementOpacity(selectedId, it) },
+                                            valueRange = 0.0f..1.0f,
+                                            colors = SliderDefaults.colors(thumbColor = PrimaryRed, activeTrackColor = PrimaryRed),
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                }
+                                ActiveSubTool.EFFECTS -> {
+                                    val curEff = state.getLayerEffect(selectedId)
+                                    Column(modifier = Modifier.padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        // Effect Tabs (Drop Shadow / Outer Glow / Inner Glow)
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            FilterChip(
+                                                selected = effectTab == "DROP_SHADOW",
+                                                onClick = { effectTab = "DROP_SHADOW" },
+                                                label = { Text("Drop Shadow 👥", fontSize = 11.sp) },
+                                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White),
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            FilterChip(
+                                                selected = effectTab == "OUTER_GLOW",
+                                                onClick = { effectTab = "OUTER_GLOW" },
+                                                label = { Text("Outer Glow ✨", fontSize = 11.sp) },
+                                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White),
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            FilterChip(
+                                                selected = effectTab == "INNER_GLOW",
+                                                onClick = { effectTab = "INNER_GLOW" },
+                                                label = { Text("Inner Glow 🌟", fontSize = 11.sp) },
+                                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White),
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+
+                                        when (effectTab) {
+                                            "DROP_SHADOW" -> {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text("Blur: ${curEff.dropShadowRadius.toInt()} dp", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(90.dp))
+                                                    Slider(
+                                                        value = curEff.dropShadowRadius,
+                                                        onValueChange = { viewModel.updateDropShadow(selectedId, curEff.dropShadowColor ?: "#000000", it, curEff.dropShadowDx, curEff.dropShadowDy) },
+                                                        valueRange = 0f..40f,
+                                                        colors = SliderDefaults.colors(thumbColor = PrimaryRed, activeTrackColor = PrimaryRed),
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                }
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    Surface(
+                                                        modifier = Modifier
+                                                            .size(32.dp)
+                                                            .clip(CircleShape)
+                                                            .clickable {
+                                                                colorPickerTargetId = selectedId
+                                                                colorPickerInputHex = curEff.dropShadowColor ?: "#000000"
+                                                                colorPickerMode = "SHADOW"
+                                                                showColorPickerDialog = true
+                                                            },
+                                                        shape = CircleShape,
+                                                        color = try { Color(android.graphics.Color.parseColor(curEff.dropShadowColor ?: "#000000")) } catch (_: Exception) { Color.Black },
+                                                        border = BorderStroke(1.5.dp, PrimaryRed)
+                                                    ) {}
+
+                                                    FilterChip(
+                                                        selected = curEff.dropShadowColor != null,
+                                                        onClick = {
+                                                            if (curEff.dropShadowColor != null) {
+                                                                viewModel.updateDropShadow(selectedId, null, 0f, 0f, 0f)
+                                                            } else {
+                                                                viewModel.updateDropShadow(selectedId, "#000000", 12f, 4f, 4f)
+                                                            }
+                                                        },
+                                                        label = { Text(if (curEff.dropShadowColor != null) "Disable Shadow" else "Enable Shadow", fontSize = 11.sp) },
+                                                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White)
+                                                    )
+                                                }
+                                            }
+                                            "OUTER_GLOW" -> {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text("Glow: ${curEff.outerGlowRadius.toInt()} dp", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(90.dp))
+                                                    Slider(
+                                                        value = curEff.outerGlowRadius,
+                                                        onValueChange = { viewModel.updateOuterGlow(selectedId, curEff.outerGlowColor ?: "#FF0055", it) },
+                                                        valueRange = 0f..50f,
+                                                        colors = SliderDefaults.colors(thumbColor = PrimaryRed, activeTrackColor = PrimaryRed),
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                }
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    Surface(
+                                                        modifier = Modifier
+                                                            .size(32.dp)
+                                                            .clip(CircleShape)
+                                                            .clickable {
+                                                                colorPickerTargetId = selectedId
+                                                                colorPickerInputHex = curEff.outerGlowColor ?: "#FF0055"
+                                                                colorPickerMode = "OUTER_GLOW"
+                                                                showColorPickerDialog = true
+                                                            },
+                                                        shape = CircleShape,
+                                                        color = try { Color(android.graphics.Color.parseColor(curEff.outerGlowColor ?: "#FF0055")) } catch (_: Exception) { Color.Red },
+                                                        border = BorderStroke(1.5.dp, PrimaryRed)
+                                                    ) {}
+
+                                                    FilterChip(
+                                                        selected = curEff.outerGlowColor != null,
+                                                        onClick = {
+                                                            if (curEff.outerGlowColor != null) {
+                                                                viewModel.updateOuterGlow(selectedId, null, 0f)
+                                                            } else {
+                                                                viewModel.updateOuterGlow(selectedId, "#FF0055", 16f)
+                                                            }
+                                                        },
+                                                        label = { Text(if (curEff.outerGlowColor != null) "Disable Glow" else "Enable Glow", fontSize = 11.sp) },
+                                                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White)
+                                                    )
+                                                }
+                                            }
+                                            "INNER_GLOW" -> {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text("Inner: ${curEff.innerGlowRadius.toInt()} dp", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(90.dp))
+                                                    Slider(
+                                                        value = curEff.innerGlowRadius,
+                                                        onValueChange = { viewModel.updateInnerGlow(selectedId, curEff.innerGlowColor ?: "#00D2FF", it) },
+                                                        valueRange = 0f..30f,
+                                                        colors = SliderDefaults.colors(thumbColor = PrimaryRed, activeTrackColor = PrimaryRed),
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                }
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    Surface(
+                                                        modifier = Modifier
+                                                            .size(32.dp)
+                                                            .clip(CircleShape)
+                                                            .clickable {
+                                                                colorPickerTargetId = selectedId
+                                                                colorPickerInputHex = curEff.innerGlowColor ?: "#00D2FF"
+                                                                colorPickerMode = "INNER_GLOW"
+                                                                showColorPickerDialog = true
+                                                            },
+                                                        shape = CircleShape,
+                                                        color = try { Color(android.graphics.Color.parseColor(curEff.innerGlowColor ?: "#00D2FF")) } catch (_: Exception) { Color.Cyan },
+                                                        border = BorderStroke(1.5.dp, PrimaryRed)
+                                                    ) {}
+
+                                                    FilterChip(
+                                                        selected = curEff.innerGlowColor != null,
+                                                        onClick = {
+                                                            if (curEff.innerGlowColor != null) {
+                                                                viewModel.updateInnerGlow(selectedId, null, 0f)
+                                                            } else {
+                                                                viewModel.updateInnerGlow(selectedId, "#00D2FF", 12f)
+                                                            }
+                                                        },
+                                                        label = { Text(if (curEff.innerGlowColor != null) "Disable Glow" else "Enable Glow", fontSize = 11.sp) },
+                                                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White)
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -861,8 +1193,47 @@ fun EditorScreen(
                                             }
                                             .padding(horizontal = 12.dp, vertical = 8.dp)
                                     ) {
-                                        Icon(imageVector = Icons.Default.Palette, contentDescription = "Color & Gradient", tint = MainText)
-                                        Text("Color", fontSize = 11.sp, color = MainText)
+                                        Icon(imageVector = Icons.Default.Palette, contentDescription = "Fill Color", tint = MainText)
+                                        Text("Fill", fontSize = 11.sp, color = MainText)
+                                    }
+
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .clickable {
+                                                activeSubTool = if (activeSubTool == ActiveSubTool.STROKE) ActiveSubTool.NONE else ActiveSubTool.STROKE
+                                            }
+                                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    ) {
+                                        Icon(imageVector = Icons.Default.BorderColor, contentDescription = "Stroke Border", tint = MainText)
+                                        Text("Stroke", fontSize = 11.sp, color = MainText)
+                                    }
+
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .clickable {
+                                                activeSubTool = if (activeSubTool == ActiveSubTool.OPACITY) ActiveSubTool.NONE else ActiveSubTool.OPACITY
+                                            }
+                                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Opacity, contentDescription = "Opacity", tint = MainText)
+                                        Text("Opacity", fontSize = 11.sp, color = MainText)
+                                    }
+
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .clickable {
+                                                activeSubTool = if (activeSubTool == ActiveSubTool.EFFECTS) ActiveSubTool.NONE else ActiveSubTool.EFFECTS
+                                            }
+                                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    ) {
+                                        Icon(imageVector = Icons.Default.AutoFixHigh, contentDescription = "Layer Effects", tint = PrimaryRed)
+                                        Text("Effects", fontSize = 11.sp, color = PrimaryRed, fontWeight = FontWeight.Bold)
                                     }
 
                                     if (selectedElem !is TemplateElement.Background) {
@@ -1110,112 +1481,53 @@ fun EditorScreen(
         }
     }
 
-    // Custom Hex Color Picker Dialog
+    // Photorealistic HSV 2D Saturation-Value Color Picker Dialog (Matching Attached UI)
     if (showColorPickerDialog && colorPickerTargetId != null) {
         val targetId = colorPickerTargetId!!
-        AlertDialog(
-            onDismissRequest = { showColorPickerDialog = false },
-            title = { Text("Custom Color Picker", fontWeight = FontWeight.Bold, color = MainText) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(
-                                    try {
-                                        Color(android.graphics.Color.parseColor(colorPickerInputHex))
-                                    } catch (_: Exception) {
-                                        Color.Red
-                                    }
-                                )
-                                .border(1.5.dp, SubtleBorder, RoundedCornerShape(8.dp))
-                        )
-
-                        OutlinedTextField(
-                            value = colorPickerInputHex,
-                            onValueChange = { colorPickerInputHex = it },
-                            label = { Text("Hex Color (#RRGGBB)") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = PrimaryRed, cursorColor = PrimaryRed)
-                        )
+        AdvancedColorPickerDialog(
+            initialColorHex = colorPickerInputHex,
+            onDismiss = { showColorPickerDialog = false },
+            onEyedropperClick = { viewModel.setEyedropperActive(true) },
+            onSaveSwatch = { hex -> viewModel.addSavedSwatch(hex) },
+            onApplyColor = { hex ->
+                when (colorPickerMode) {
+                    "STROKE" -> {
+                        val curW = state.getElementStroke(targetId)?.second ?: 4f
+                        viewModel.updateElementStroke(targetId, hex, curW.coerceAtLeast(2f))
                     }
-
-                    Text("Quick Swatches", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = SecondaryText)
-                    val sampleSwatches = listOf(
-                        "#C91F2C", "#A91521", "#E53945", "#000000", "#FFFFFF", "#1E3A8A",
-                        "#065F46", "#D97706", "#8B5CF6", "#EC4899", "#10B981", "#3B82F6"
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        sampleSwatches.forEach { hex ->
-                            Surface(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .clickable { colorPickerInputHex = hex },
-                                shape = CircleShape,
-                                color = Color(android.graphics.Color.parseColor(hex)),
-                                border = BorderStroke(1.dp, SubtleBorder)
-                            ) {}
-                        }
+                    "SHADOW" -> {
+                        val curEff = state.getLayerEffect(targetId)
+                        viewModel.updateDropShadow(targetId, hex, curEff.dropShadowRadius.coerceAtLeast(8f), curEff.dropShadowDx, curEff.dropShadowDy)
                     }
+                    "OUTER_GLOW" -> {
+                        val curEff = state.getLayerEffect(targetId)
+                        viewModel.updateOuterGlow(targetId, hex, curEff.outerGlowRadius.coerceAtLeast(12f))
+                    }
+                    "INNER_GLOW" -> {
+                        val curEff = state.getLayerEffect(targetId)
+                        viewModel.updateInnerGlow(targetId, hex, curEff.innerGlowRadius.coerceAtLeast(8f))
+                    }
+                    else -> viewModel.updateTextColor(targetId, hex)
                 }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        try {
-                            Color(android.graphics.Color.parseColor(colorPickerInputHex))
-                            viewModel.updateTextColor(targetId, colorPickerInputHex)
-                        } catch (_: Exception) {}
-                        showColorPickerDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryRed)
-                ) {
-                    Text("Apply Color")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showColorPickerDialog = false }) {
-                    Text("Cancel", color = MainText)
-                }
-            },
-            containerColor = Color.White,
-            shape = RoundedCornerShape(16.dp)
+            }
         )
     }
 
-    // Custom Gradient Builder Dialog
+    // Custom Gradient Builder Dialog (With Photoshop Style Linear, Radial, Sweep, Reverse & Angle)
     if (showGradientBuilderDialog && colorPickerTargetId != null) {
         val targetId = colorPickerTargetId!!
         val selectedElem = state.template.elements.find { it.id == targetId }
-        val currentGrad = state.getElementGradient(targetId)
-        val initialColors = currentGrad?.first ?: if (selectedElem is TemplateElement.Background) state.bgGradientColors ?: listOf("#FF512F", "#DD2476") else listOf("#FF512F", "#DD2476")
-        val initialAngle = currentGrad?.second ?: if (selectedElem is TemplateElement.Background) state.bgGradientAngle else 45f
+        val currentGrad = state.getElementGradient(targetId) ?: if (selectedElem is TemplateElement.Background) state.bgGradientConfig else null
 
         CustomGradientPickerDialog(
-            initialColors = initialColors,
-            initialAngle = initialAngle,
+            initialConfig = currentGrad,
             onDismiss = { showGradientBuilderDialog = false },
-            onApply = { colors, angle ->
-                if (selectedElem is TemplateElement.Background) {
-                    viewModel.updateBgGradient(colors, angle)
-                } else {
-                    viewModel.updateElementGradient(targetId, colors, angle)
-                }
+            onApply = { config ->
+                viewModel.updateElementGradient(targetId, config)
                 showGradientBuilderDialog = false
-            }
+            },
+            onEyedropperClick = { viewModel.setEyedropperActive(true) },
+            onSaveSwatch = { hex -> viewModel.addSavedSwatch(hex) }
         )
     }
 
@@ -1330,16 +1642,352 @@ fun EditorScreen(
 }
 
 @Composable
-private fun CustomGradientPickerDialog(
-    initialColors: List<String>,
-    initialAngle: Float,
+private fun AdvancedColorPickerDialog(
+    initialColorHex: String,
     onDismiss: () -> Unit,
-    onApply: (List<String>, Float) -> Unit
+    onEyedropperClick: () -> Unit,
+    onSaveSwatch: (String) -> Unit,
+    onApplyColor: (String) -> Unit
 ) {
-    var colors by remember { mutableStateOf(if (initialColors.size >= 2) initialColors else listOf("#FF512F", "#DD2476")) }
+    var hsv by remember {
+        val colorInt = try { android.graphics.Color.parseColor(initialColorHex) } catch (_: Exception) { android.graphics.Color.parseColor("#C91F2C") }
+        val array = FloatArray(3)
+        android.graphics.Color.colorToHSV(colorInt, array)
+        mutableStateOf(array)
+    }
+
+    var alpha by remember {
+        val colorInt = try { android.graphics.Color.parseColor(initialColorHex) } catch (_: Exception) { android.graphics.Color.parseColor("#C91F2C") }
+        mutableFloatStateOf(android.graphics.Color.alpha(colorInt) / 255f)
+    }
+
+    val currentArgb = remember(hsv, alpha) {
+        android.graphics.Color.HSVToColor((alpha * 255).toInt(), hsv)
+    }
+
+    val currentHex = remember(currentArgb) {
+        String.format("#%06X", 0xFFFFFF and currentArgb)
+    }
+
+    var hexInputText by remember(currentHex) { mutableStateOf(currentHex) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Color Picker", fontWeight = FontWeight.Bold, color = MainText, fontSize = 18.sp)
+
+                Surface(
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)),
+                    color = SecondaryBackground,
+                    border = BorderStroke(1.dp, SubtleBorder)
+                ) {
+                    Text(
+                        text = "Hex",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MainText,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // 1. Photorealistic 2D Saturation-Value (SV) Box
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(1.dp, SubtleBorder, RoundedCornerShape(12.dp))
+                ) {
+                    val boxW = constraints.maxWidth.toFloat()
+                    val boxH = constraints.maxHeight.toFloat()
+
+                    val pureColor = Color(android.graphics.Color.HSVToColor(floatArrayOf(hsv[0], 1f, 1f)))
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(Color.White, pureColor)
+                                )
+                            )
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(Color.Transparent, Color.Black)
+                                    )
+                                )
+                                .pointerInput(Unit) {
+                                    detectDragGestures(
+                                        onDragStart = { offset ->
+                                            val sat = (offset.x / boxW).coerceIn(0f, 1f)
+                                            val valB = (1f - offset.y / boxH).coerceIn(0f, 1f)
+                                            hsv = floatArrayOf(hsv[0], sat, valB)
+                                        },
+                                        onDrag = { change, _ ->
+                                            change.consume()
+                                            val sat = (change.position.x / boxW).coerceIn(0f, 1f)
+                                            val valB = (1f - change.position.y / boxH).coerceIn(0f, 1f)
+                                            hsv = floatArrayOf(hsv[0], sat, valB)
+                                        }
+                                    )
+                                }
+                        ) {
+                            // Circular Selector Thumb ◯
+                            val thumbX = hsv[1] * boxW
+                            val thumbY = (1f - hsv[2]) * boxH
+
+                            Box(
+                                modifier = Modifier
+                                    .offset { IntOffset((thumbX - 12.dp.toPx()).toInt(), (thumbY - 12.dp.toPx()).toInt()) }
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .border(2.5.dp, Color.White, CircleShape)
+                                    .shadow(4.dp, CircleShape)
+                            )
+                        }
+                    }
+                }
+
+                // 2. 1D Rainbow Hue Slider Bar
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(26.dp)
+                        .clip(RoundedCornerShape(13.dp))
+                        .border(1.dp, SubtleBorder, RoundedCornerShape(13.dp))
+                ) {
+                    val hueBarW = constraints.maxWidth.toFloat()
+                    val rainbowColors = listOf(
+                        Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(brush = Brush.horizontalGradient(rainbowColors))
+                            .pointerInput(Unit) {
+                                detectDragGestures(
+                                    onDragStart = { offset ->
+                                        val newHue = (offset.x / hueBarW * 360f).coerceIn(0f, 360f)
+                                        hsv = floatArrayOf(newHue, hsv[1], hsv[2])
+                                    },
+                                    onDrag = { change, _ ->
+                                        change.consume()
+                                        val newHue = (change.position.x / hueBarW * 360f).coerceIn(0f, 360f)
+                                        hsv = floatArrayOf(newHue, hsv[1], hsv[2])
+                                    }
+                                )
+                            }
+                    ) {
+                        val thumbHueX = (hsv[0] / 360f) * hueBarW
+                        Box(
+                            modifier = Modifier
+                                .offset { IntOffset((thumbHueX - 11.dp.toPx()).toInt(), 2.dp.toPx().toInt()) }
+                                .size(22.dp)
+                                .clip(CircleShape)
+                                .border(2.dp, Color.White, CircleShape)
+                                .shadow(3.dp, CircleShape)
+                        )
+                    }
+                }
+
+                // 3. 1D Alpha Opacity Bar (Checkerboard Background)
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(26.dp)
+                        .clip(RoundedCornerShape(13.dp))
+                        .border(1.dp, SubtleBorder, RoundedCornerShape(13.dp))
+                ) {
+                    val alphaBarW = constraints.maxWidth.toFloat()
+                    val solidColor = Color(android.graphics.Color.HSVToColor(hsv))
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(solidColor.copy(alpha = 0f), solidColor)
+                                )
+                            )
+                            .pointerInput(Unit) {
+                                detectDragGestures(
+                                    onDragStart = { offset ->
+                                        alpha = (offset.x / alphaBarW).coerceIn(0f, 1f)
+                                    },
+                                    onDrag = { change, _ ->
+                                        change.consume()
+                                        alpha = (change.position.x / alphaBarW).coerceIn(0f, 1f)
+                                    }
+                                )
+                            }
+                    ) {
+                        val thumbAlphaX = alpha * alphaBarW
+                        Box(
+                            modifier = Modifier
+                                .offset { IntOffset((thumbAlphaX - 11.dp.toPx()).toInt(), 2.dp.toPx().toInt()) }
+                                .size(22.dp)
+                                .clip(CircleShape)
+                                .border(2.dp, Color.White, CircleShape)
+                                .shadow(3.dp, CircleShape)
+                        )
+                    }
+                }
+
+                // 4. Live Color Hex Input + Eyedropper + Add Swatch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp)),
+                        color = SecondaryBackground,
+                        border = BorderStroke(1.dp, SubtleBorder)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color(currentArgb))
+                                    .border(1.dp, SubtleBorder, RoundedCornerShape(4.dp))
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            OutlinedTextField(
+                                value = hexInputText,
+                                onValueChange = {
+                                    hexInputText = it
+                                    try {
+                                        val parsed = android.graphics.Color.parseColor(it)
+                                        val arr = FloatArray(3)
+                                        android.graphics.Color.colorToHSV(parsed, arr)
+                                        hsv = arr
+                                    } catch (_: Exception) {}
+                                },
+                                modifier = Modifier.weight(1f),
+                                textStyle = TextStyle(fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MainText),
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Color.Transparent, unfocusedBorderColor = Color.Transparent)
+                            )
+                        }
+                    }
+
+                    // Eyedropper Button
+                    Surface(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable {
+                                onDismiss()
+                                onEyedropperClick()
+                            },
+                        shape = RoundedCornerShape(10.dp),
+                        color = SecondaryBackground,
+                        border = BorderStroke(1.dp, SubtleBorder)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(imageVector = Icons.Default.Colorize, contentDescription = "Eyedropper", tint = MainText, modifier = Modifier.size(20.dp))
+                        }
+                    }
+
+                    // Add Swatch Button
+                    Surface(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { onSaveSwatch(currentHex) },
+                        shape = RoundedCornerShape(10.dp),
+                        color = SecondaryBackground,
+                        border = BorderStroke(1.dp, SubtleBorder)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = "Add Swatch", tint = PrimaryRed, modifier = Modifier.size(22.dp))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onApplyColor(currentHex)
+                    onDismiss()
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryRed)
+            ) {
+                Text("Apply Color")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = MainText)
+            }
+        },
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp)
+    )
+}
+
+@Composable
+private fun CustomGradientPickerDialog(
+    initialConfig: GradientConfig?,
+    onDismiss: () -> Unit,
+    onApply: (GradientConfig) -> Unit,
+    onEyedropperClick: () -> Unit,
+    onSaveSwatch: (String) -> Unit
+) {
+    var colors by remember { mutableStateOf(initialConfig?.colors ?: listOf("#FF512F", "#DD2476")) }
+    var angle by remember { mutableFloatStateOf(initialConfig?.angle ?: 45f) }
+    var type by remember { mutableStateOf(initialConfig?.type ?: "LINEAR") }
+    var isReversed by remember { mutableStateOf(initialConfig?.isReversed ?: false) }
+    var tileMode by remember { mutableStateOf(initialConfig?.tileMode ?: "CLAMP") }
+
     var selectedStopIndex by remember { mutableIntStateOf(0) }
-    var angle by remember { mutableFloatStateOf(initialAngle) }
     var hexInput by remember { mutableStateOf(colors.getOrElse(selectedStopIndex) { "#C91F2C" }) }
+    var showStopColorPicker by remember { mutableStateOf(false) }
+
+    if (showStopColorPicker) {
+        AdvancedColorPickerDialog(
+            initialColorHex = colors.getOrElse(selectedStopIndex) { "#C91F2C" },
+            onDismiss = { showStopColorPicker = false },
+            onEyedropperClick = {
+                showStopColorPicker = false
+                onDismiss()
+                onEyedropperClick()
+            },
+            onSaveSwatch = onSaveSwatch,
+            onApplyColor = { pickedHex ->
+                val updated = colors.toMutableList()
+                if (selectedStopIndex in updated.indices) {
+                    updated[selectedStopIndex] = pickedHex
+                    colors = updated
+                    hexInput = pickedHex
+                }
+                showStopColorPicker = false
+            }
+        )
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1356,30 +2004,78 @@ private fun CustomGradientPickerDialog(
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 // Live Gradient Preview Box
+                val displayColors = if (isReversed) colors.reversed() else colors
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(80.dp)
+                        .height(90.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(
-                            brush = Brush.linearGradient(
-                                colors = colors.map {
-                                    try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Red }
-                                }
-                            )
+                            brush = when (type.uppercase()) {
+                                "RADIAL" -> Brush.radialGradient(
+                                    colors = displayColors.map { try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Red } }
+                                )
+                                "SWEEP" -> Brush.sweepGradient(
+                                    colors = displayColors.map { try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Red } }
+                                )
+                                else -> Brush.linearGradient(
+                                    colors = displayColors.map { try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Red } }
+                                )
+                            }
                         )
                         .border(1.5.dp, SubtleBorder, RoundedCornerShape(12.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Angle: ${angle.toInt()}°",
+                        text = "$type | ${angle.toInt()}°",
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp,
                         modifier = Modifier
-                            .background(Color.Black.copy(alpha = 0.4f), CircleShape)
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                            .background(Color.Black.copy(alpha = 0.45f), CircleShape)
+                            .padding(horizontal = 12.dp, vertical = 5.dp)
                     )
+                }
+
+                // Gradient Type Buttons (Linear / Radial / Sweep)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf("LINEAR", "RADIAL", "SWEEP").forEach { t ->
+                        FilterChip(
+                            selected = type == t,
+                            onClick = { type = t },
+                            label = { Text(t, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                // Reverse & Tile Mode Controls
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilterChip(
+                        selected = isReversed,
+                        onClick = { isReversed = !isReversed },
+                        label = { Text("⇄ Reverse", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White)
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf("CLAMP", "MIRROR", "REPEAT").forEach { tm ->
+                            FilterChip(
+                                selected = tileMode == tm,
+                                onClick = { tileMode = tm },
+                                label = { Text(tm, fontSize = 10.sp) },
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White)
+                            )
+                        }
+                    }
                 }
 
                 // Color Stops Rail Header
@@ -1431,7 +2127,7 @@ private fun CustomGradientPickerDialog(
                         val isSelected = idx == selectedStopIndex
                         Box(
                             modifier = Modifier
-                                .size(if (isSelected) 40.dp else 32.dp)
+                                .size(if (isSelected) 42.dp else 34.dp)
                                 .clip(CircleShape)
                                 .background(try { Color(android.graphics.Color.parseColor(hex)) } catch (_: Exception) { Color.Red })
                                 .border(
@@ -1442,20 +2138,35 @@ private fun CustomGradientPickerDialog(
                                 .clickable {
                                     selectedStopIndex = idx
                                     hexInput = hex
+                                    showStopColorPicker = true
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("${idx + 1}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                            Text("${idx + 1}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                         }
                     }
                 }
 
-                // Edit Active Stop Hex Color
+                // Active Stop Hex Color & Open Custom Color Picker
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    Surface(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { showStopColorPicker = true },
+                        shape = RoundedCornerShape(10.dp),
+                        color = try { Color(android.graphics.Color.parseColor(colors.getOrElse(selectedStopIndex) { "#C91F2C" })) } catch (_: Exception) { Color.Red },
+                        border = BorderStroke(1.5.dp, PrimaryRed)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(imageVector = Icons.Default.Palette, contentDescription = "Pick Stop Color", tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
+                    }
+
                     OutlinedTextField(
                         value = hexInput,
                         onValueChange = {
@@ -1472,61 +2183,47 @@ private fun CustomGradientPickerDialog(
                     )
                 }
 
-                // Quick Color Swatches
-                Text("Quick Swatches", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = SecondaryText)
-                val swatches = listOf("#C91F2C", "#A91521", "#E53945", "#000000", "#FFFFFF", "#1E3A8A", "#065F46", "#D97706", "#8B5CF6", "#EC4899")
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    swatches.forEach { hex ->
-                        Surface(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .clickable {
-                                    hexInput = hex
-                                    colors = colors.toMutableList().apply { set(selectedStopIndex, hex) }
-                                },
-                            shape = CircleShape,
-                            color = Color(android.graphics.Color.parseColor(hex)),
-                            border = BorderStroke(1.dp, SubtleBorder)
-                        ) {}
-                    }
-                }
+                // Angle Slider
+                if (type == "LINEAR") {
+                    Text("Gradient Angle (${angle.toInt()}°)", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MainText)
+                    Slider(
+                        value = angle,
+                        onValueChange = { angle = it },
+                        valueRange = 0f..360f,
+                        colors = SliderDefaults.colors(thumbColor = PrimaryRed, activeTrackColor = PrimaryRed)
+                    )
 
-                // Gradient Direction Angle Slider (0° - 360°)
-                Text("Gradient Angle (${angle.toInt()}°)", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MainText)
-                Slider(
-                    value = angle,
-                    onValueChange = { angle = it },
-                    valueRange = 0f..360f,
-                    colors = SliderDefaults.colors(thumbColor = PrimaryRed, activeTrackColor = PrimaryRed)
-                )
-
-                // Quick Angle Chips
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    listOf(0f to "0° (H)", 45f to "45° (Diag)", 90f to "90° (V)", 135f to "135°", 180f to "180°", 270f to "270°").forEach { (a, label) ->
-                        FilterChip(
-                            selected = angle == a,
-                            onClick = { angle = a },
-                            label = { Text(label, fontSize = 10.sp) },
-                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White)
-                        )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(0f to "0° (H)", 45f to "45° (Diag)", 90f to "90° (V)", 135f to "135°", 180f to "180°", 270f to "270°").forEach { (a, label) ->
+                            FilterChip(
+                                selected = angle == a,
+                                onClick = { angle = a },
+                                label = { Text(label, fontSize = 10.sp) },
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White)
+                            )
+                        }
                     }
                 }
             }
         },
         confirmButton = {
             Button(
-                onClick = { onApply(colors, angle) },
+                onClick = {
+                    onApply(
+                        GradientConfig(
+                            colors = colors,
+                            angle = angle,
+                            type = type,
+                            isReversed = isReversed,
+                            tileMode = tileMode
+                        )
+                    )
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryRed)
             ) {
                 Text("Apply Gradient")

@@ -6,6 +6,44 @@ data class GuideLine(
     val colorHex: String = "#C91F2C"
 )
 
+data class GradientConfig(
+    val colors: List<String>,
+    val angle: Float = 45f,
+    val type: String = "LINEAR", // LINEAR, RADIAL, SWEEP
+    val isReversed: Boolean = false,
+    val tileMode: String = "CLAMP" // CLAMP, MIRROR, REPEAT
+)
+
+data class LayerEffectConfig(
+    val dropShadowColor: String? = null,
+    val dropShadowRadius: Float = 12f,
+    val dropShadowAngle: Float = 45f,
+    val dropShadowDistance: Float = 8f,
+    val dropShadowSpread: Float = 0f,
+    val dropShadowOpacity: Float = 0.6f,
+    val outerGlowColor: String? = null,
+    val outerGlowRadius: Float = 16f,
+    val outerGlowSpread: Float = 4f,
+    val outerGlowOpacity: Float = 0.8f,
+    val innerGlowColor: String? = null,
+    val innerGlowRadius: Float = 12f,
+    val innerGlowChoke: Float = 2f,
+    val innerGlowOpacity: Float = 0.7f,
+    val innerGlowSource: String = "EDGE"
+) {
+    val dropShadowDx: Float
+        get() {
+            val rad = Math.toRadians(dropShadowAngle.toDouble())
+            return (Math.cos(rad) * dropShadowDistance).toFloat()
+        }
+
+    val dropShadowDy: Float
+        get() {
+            val rad = Math.toRadians(dropShadowAngle.toDouble())
+            return (Math.sin(rad) * dropShadowDistance).toFloat()
+        }
+}
+
 data class EditorSnapshot(
     val editedTexts: Map<String, String>,
     val photoUris: Map<String, String>,
@@ -27,10 +65,12 @@ data class EditorSnapshot(
     val lockedElementIds: Set<String> = emptySet(),
     val hiddenElementIds: Set<String> = emptySet(),
     val elementZOrders: Map<String, Int> = emptyMap(),
-    val bgGradientColors: List<String>? = null,
-    val bgGradientAngle: Float = 0f,
+    val bgGradientConfig: GradientConfig? = null,
     val bgTextureType: String = "NONE",
-    val elementGradients: Map<String, Pair<List<String>, Float>> = emptyMap(),
+    val elementGradients: Map<String, GradientConfig> = emptyMap(),
+    val elementStrokes: Map<String, Pair<String, Float>> = emptyMap(),
+    val elementOpacities: Map<String, Float> = emptyMap(),
+    val elementEffects: Map<String, LayerEffectConfig> = emptyMap(),
     val deletedElementIds: Set<String> = emptySet()
 )
 
@@ -56,10 +96,13 @@ data class MagicStoryEditorState(
     val lockedElementIds: Set<String> = emptySet(),
     val hiddenElementIds: Set<String> = emptySet(),
     val elementZOrders: Map<String, Int> = emptyMap(),
-    val bgGradientColors: List<String>? = null,
-    val bgGradientAngle: Float = 0f,
+    val bgGradientConfig: GradientConfig? = null,
     val bgTextureType: String = "NONE",
-    val elementGradients: Map<String, Pair<List<String>, Float>> = emptyMap(),
+    val elementGradients: Map<String, GradientConfig> = emptyMap(),
+    val elementStrokes: Map<String, Pair<String, Float>> = emptyMap(),
+    val elementOpacities: Map<String, Float> = emptyMap(),
+    val elementEffects: Map<String, LayerEffectConfig> = emptyMap(),
+    val savedSwatches: List<String> = listOf("#C91F2C", "#A91521", "#E53945", "#000000", "#FFFFFF", "#1E3A8A", "#065F46", "#D97706", "#8235DC", "#3657FF"),
     val deletedElementIds: Set<String> = emptySet(),
     val selectedElementId: String? = null,
     val multiSelectedElementIds: Set<String> = emptySet(),
@@ -170,8 +213,20 @@ data class MagicStoryEditorState(
         return customFontUris[elementId]
     }
 
-    fun getElementGradient(elementId: String): Pair<List<String>, Float>? {
+    fun getElementGradient(elementId: String): GradientConfig? {
         return elementGradients[elementId]
+    }
+
+    fun getElementStroke(elementId: String): Pair<String, Float>? {
+        return elementStrokes[elementId]
+    }
+
+    fun getElementOpacity(elementId: String, defaultOpacity: Float = 1.0f): Float {
+        return elementOpacities[elementId] ?: defaultOpacity
+    }
+
+    fun getLayerEffect(elementId: String): LayerEffectConfig {
+        return elementEffects[elementId] ?: LayerEffectConfig()
     }
 
     fun isElementLocked(elementId: String): Boolean {
