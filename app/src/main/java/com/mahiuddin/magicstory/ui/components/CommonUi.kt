@@ -25,10 +25,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Clear
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -166,7 +166,7 @@ fun TextEditField(
             if (value.isNotEmpty()) {
                 IconButton(onClick = { onValueChange("") }) {
                     Icon(
-                        imageVector = Icons.Default.Clear,
+                        imageVector = Icons.Outlined.Clear,
                         contentDescription = "Clear text",
                         tint = SecondaryText
                     )
@@ -201,7 +201,7 @@ fun PhotoPickerButton(
         colors = ButtonDefaults.buttonColors(containerColor = PrimaryRed)
     ) {
         Icon(
-            imageVector = Icons.Default.Image,
+            imageVector = Icons.Outlined.Image,
             contentDescription = null,
             modifier = Modifier.size(20.dp)
         )
@@ -228,7 +228,7 @@ fun ExportSuccessDialog(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.Check,
+                    imageVector = Icons.Outlined.Check,
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(32.dp)
@@ -258,7 +258,7 @@ fun ExportSuccessDialog(
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryRed)
             ) {
-                Icon(imageVector = Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(imageVector = Icons.Outlined.Share, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("Share Design")
             }

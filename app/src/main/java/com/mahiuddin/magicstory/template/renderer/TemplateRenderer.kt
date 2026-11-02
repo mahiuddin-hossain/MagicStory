@@ -432,9 +432,17 @@ object TemplateRenderer {
         val effect = editorState.getLayerEffect(shape.id)
         val cornerRadius = shape.cornerRadius * scaleFactor
 
+        val path = VectorShapePathFactory.createPath(shape, rect, scaleFactor)
+
         canvas.save()
         if (rotation != 0f) {
             canvas.rotate(rotation, rect.centerX(), rect.centerY())
+        }
+        if (shape.skewX != 0f || shape.skewY != 0f) {
+            canvas.skew(
+                Math.tan(Math.toRadians(shape.skewX.toDouble())).toFloat(),
+                Math.tan(Math.toRadians(shape.skewY.toDouble())).toFloat()
+            )
         }
         if (flipX || flipY) {
             canvas.scale(if (flipX) -1f else 1f, if (flipY) -1f else 1f, rect.centerX(), rect.centerY())
@@ -443,63 +451,80 @@ object TemplateRenderer {
         // Draw Outer Glow
         drawOuterGlow(canvas, rect, effect, scaleFactor, cornerRadius)
 
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        // Fill Paint
+        if (!shape.fillType.equals("NONE", ignoreCase = true)) {
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                if (effect.dropShadowColor != null && effect.dropShadowRadius > 0f) {
+                    val colorInt = safeParseColor(effect.dropShadowColor)
+                    val alphaInt = (effect.dropShadowOpacity.coerceIn(0f, 1f) * Color.alpha(colorInt)).toInt().coerceIn(0, 255)
+                    val shadowColor = Color.argb(alphaInt, Color.red(colorInt), Color.green(colorInt), Color.blue(colorInt))
 
-        if (effect.dropShadowColor != null && effect.dropShadowRadius > 0f) {
-            val colorInt = safeParseColor(effect.dropShadowColor)
-            val alphaInt = (effect.dropShadowOpacity.coerceIn(0f, 1f) * Color.alpha(colorInt)).toInt().coerceIn(0, 255)
-            val shadowColor = Color.argb(alphaInt, Color.red(colorInt), Color.green(colorInt), Color.blue(colorInt))
+                    setShadowLayer(
+                        effect.dropShadowRadius * scaleFactor,
+                        effect.dropShadowDx * scaleFactor,
+                        effect.dropShadowDy * scaleFactor,
+                        shadowColor
+                    )
+                } else if (shape.shadowColor != null && shape.shadowRadius > 0f) {
+                    setShadowLayer(
+                        shape.shadowRadius * scaleFactor,
+                        shape.shadowDx * scaleFactor,
+                        shape.shadowDy * scaleFactor,
+                        safeParseColor(shape.shadowColor)
+                    )
+                }
 
-            paint.setShadowLayer(
-                effect.dropShadowRadius * scaleFactor,
-                effect.dropShadowDx * scaleFactor,
-                effect.dropShadowDy * scaleFactor,
-                shadowColor
-            )
-        } else if (shape.shadowColor != null && shape.shadowRadius > 0f) {
-            paint.setShadowLayer(
-                shape.shadowRadius * scaleFactor,
-                shape.shadowDx * scaleFactor,
-                shape.shadowDy * scaleFactor,
-                safeParseColor(shape.shadowColor)
-            )
-        }
-
-        val customGrad = editorState.getElementGradient(shape.id)
-        if (customGrad != null && customGrad.colors.size >= 2) {
-            paint.shader = createGradientShader(rect, customGrad)
-        } else {
-            paint.color = safeParseColor(editorState.getTextColor(shape.id, shape.color))
-        }
-        paint.style = Paint.Style.FILL
-
-        when (shape.shapeType.uppercase()) {
-            "ROUNDED_RECTANGLE" -> canvas.drawRoundRect(rect, cornerRadius, cornerRadius, paint)
-            "CIRCLE" -> canvas.drawOval(rect, paint)
-            "LINE" -> {
-                paint.style = Paint.Style.STROKE
-                paint.strokeWidth = shape.borderWidth * scaleFactor
-                canvas.drawLine(x, y + h / 2f, x + w, y + h / 2f, paint)
+                val customGrad = editorState.getElementGradient(shape.id)
+                if (customGrad != null && customGrad.colors.size >= 2) {
+                    shader = createGradientShader(rect, customGrad)
+                } else {
+                    color = safeParseColor(editorState.getTextColor(shape.id, shape.color))
+                }
+                style = Paint.Style.FILL
             }
-            else -> canvas.drawRect(rect, paint)
+            canvas.drawPath(path, paint)
         }
 
-        if (shape.borderColor != null && shape.borderWidth > 0f) {
+        // Native Border / Stroke
+        val stroke = editorState.getElementStroke(shape.id)
+        val strokeColorHex = stroke?.first ?: shape.borderColor
+        val strokeW = stroke?.second ?: shape.borderWidth
+        val strokeStyleKey = shape.strokeStyle
+        val strokeCapKey = shape.strokeCap
+        val strokeJoinKey = shape.strokeJoin
+
+        if (strokeColorHex != null && strokeW > 0f) {
+            val strokeColorInt = safeParseColor(strokeColorHex)
+            val alphaInt = (shape.strokeOpacity.coerceIn(0f, 1f) * Color.alpha(strokeColorInt)).toInt().coerceIn(0, 255)
+            val finalStrokeColor = Color.argb(alphaInt, Color.red(strokeColorInt), Color.green(strokeColorInt), Color.blue(strokeColorInt))
+
             val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = safeParseColor(shape.borderColor)
+                color = finalStrokeColor
                 style = Paint.Style.STROKE
-                strokeWidth = shape.borderWidth * scaleFactor
+                strokeWidth = strokeW * scaleFactor
+
+                strokeCap = when (strokeCapKey.uppercase()) {
+                    "ROUND" -> Paint.Cap.ROUND
+                    "SQUARE" -> Paint.Cap.SQUARE
+                    else -> Paint.Cap.BUTT
+                }
+
+                strokeJoin = when (strokeJoinKey.uppercase()) {
+                    "ROUND" -> Paint.Join.ROUND
+                    "BEVEL" -> Paint.Join.BEVEL
+                    else -> Paint.Join.MITER
+                }
+
+                when (strokeStyleKey.uppercase()) {
+                    "DASHED" -> pathEffect = DashPathEffect(floatArrayOf(16f * scaleFactor, 10f * scaleFactor), 0f)
+                    "DOTTED" -> pathEffect = DashPathEffect(floatArrayOf(4f * scaleFactor, 8f * scaleFactor), 0f)
+                    else -> pathEffect = null
+                }
             }
-            if (shape.shapeType.uppercase() == "ROUNDED_RECTANGLE") {
-                canvas.drawRoundRect(rect, cornerRadius, cornerRadius, strokePaint)
-            } else if (shape.shapeType.uppercase() == "CIRCLE") {
-                canvas.drawOval(rect, strokePaint)
-            } else {
-                canvas.drawRect(rect, strokePaint)
-            }
+
+            canvas.drawPath(path, strokePaint)
         }
 
-        drawCustomStroke(canvas, rect, shape.id, editorState, scaleFactor, cornerRadius)
         drawInnerGlow(canvas, rect, effect, scaleFactor, cornerRadius)
 
         val isSelected = !editorState.isExporting && editorState.isElementSelected(shape.id)
@@ -951,23 +976,33 @@ object TemplateRenderer {
     ) {
         if (!isSelected) return
 
+        val primaryAccentColor = safeParseColor("#C91F2C")
+
+        // 1. Crisp 1.5dp selection outline
         val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#C91F2C")
+            color = primaryAccentColor
             style = Paint.Style.STROKE
-            strokeWidth = 2.5f * scaleFactor
+            strokeWidth = 1.5f * scaleFactor
         }
         canvas.drawRect(rect, strokePaint)
 
-        val handlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#C91F2C")
-            style = Paint.Style.FILL
-        }
-        val whitePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        // Handle paints
+        val handleBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             style = Paint.Style.FILL
         }
+        val handleBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = primaryAccentColor
+            style = Paint.Style.STROKE
+            strokeWidth = 1.5f * scaleFactor
+        }
+        val handleCorePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = primaryAccentColor
+            style = Paint.Style.FILL
+        }
 
-        val handleRadius = 6.5f * scaleFactor
+        // 2. Corner transform handles (5.5dp radius)
+        val cornerRadius = 5.5f * scaleFactor
         val corners = arrayOf(
             Pair(rect.left, rect.top),
             Pair(rect.right, rect.top),
@@ -976,22 +1011,38 @@ object TemplateRenderer {
         )
 
         corners.forEach { (cx, cy) ->
-            canvas.drawCircle(cx, cy, handleRadius, handlePaint)
-            canvas.drawCircle(cx, cy, handleRadius * 0.5f, whitePaint)
+            canvas.drawCircle(cx, cy, cornerRadius, handleBgPaint)
+            canvas.drawCircle(cx, cy, cornerRadius, handleBorderPaint)
+            canvas.drawCircle(cx, cy, cornerRadius * 0.45f, handleCorePaint)
         }
 
+        // 3. Side edge resize handles (4.0dp radius)
+        val sideRadius = 4.0f * scaleFactor
+        val sideEdges = arrayOf(
+            Pair(rect.left, rect.centerY()),
+            Pair(rect.right, rect.centerY()),
+            Pair(rect.centerX(), rect.bottom)
+        )
+
+        sideEdges.forEach { (cx, cy) ->
+            canvas.drawCircle(cx, cy, sideRadius, handleBgPaint)
+            canvas.drawCircle(cx, cy, sideRadius, handleBorderPaint)
+        }
+
+        // 4. Top Rotation Stem & Handle Node
         val topCenterX = rect.centerX()
-        val topCenterY = rect.top - (22f * scaleFactor)
+        val topCenterY = rect.top - (20f * scaleFactor)
 
         val stemPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#C91F2C")
+            color = primaryAccentColor
             style = Paint.Style.STROKE
-            strokeWidth = 2f * scaleFactor
+            strokeWidth = 1.5f * scaleFactor
         }
         canvas.drawLine(rect.centerX(), rect.top, topCenterX, topCenterY, stemPaint)
 
-        canvas.drawCircle(topCenterX, topCenterY, handleRadius * 1.1f, handlePaint)
-        canvas.drawCircle(topCenterX, topCenterY, handleRadius * 0.6f, whitePaint)
+        canvas.drawCircle(topCenterX, topCenterY, cornerRadius * 1.15f, handleBgPaint)
+        canvas.drawCircle(topCenterX, topCenterY, cornerRadius * 1.15f, handleBorderPaint)
+        canvas.drawCircle(topCenterX, topCenterY, cornerRadius * 0.55f, handleCorePaint)
     }
 
     fun sampleColorAt(
@@ -1038,6 +1089,165 @@ object TemplateRenderer {
             Color.parseColor(colorHex)
         } catch (e: Exception) {
             Color.BLACK
+        }
+    }
+}
+
+object VectorShapePathFactory {
+
+    fun createPath(shape: TemplateElement.Shape, rect: RectF, scaleFactor: Float): Path {
+        val path = Path()
+        val shapeType = shape.shapeType.uppercase()
+
+        when (shapeType) {
+            "RECTANGLE", "SQUARE" -> {
+                path.addRect(rect, Path.Direction.CW)
+            }
+            "ROUNDED_RECTANGLE" -> {
+                val tl = (if (shape.topLeftRadius > 0f) shape.topLeftRadius else shape.cornerRadius) * scaleFactor
+                val tr = (if (shape.topRightRadius > 0f) shape.topRightRadius else shape.cornerRadius) * scaleFactor
+                val br = (if (shape.bottomRightRadius > 0f) shape.bottomRightRadius else shape.cornerRadius) * scaleFactor
+                val bl = (if (shape.bottomLeftRadius > 0f) shape.bottomLeftRadius else shape.cornerRadius) * scaleFactor
+
+                val radii = floatArrayOf(tl, tl, tr, tr, br, br, bl, bl)
+                path.addRoundRect(rect, radii, Path.Direction.CW)
+            }
+            "CIRCLE", "ELLIPSE" -> {
+                path.addOval(rect, Path.Direction.CW)
+            }
+            "TRIANGLE" -> {
+                path.moveTo(rect.centerX(), rect.top)
+                path.lineTo(rect.right, rect.bottom)
+                path.lineTo(rect.left, rect.bottom)
+                path.close()
+            }
+            "RIGHT_TRIANGLE" -> {
+                path.moveTo(rect.left, rect.top)
+                path.lineTo(rect.right, rect.bottom)
+                path.lineTo(rect.left, rect.bottom)
+                path.close()
+            }
+            "DIAMOND" -> {
+                path.moveTo(rect.centerX(), rect.top)
+                path.lineTo(rect.right, rect.centerY())
+                path.lineTo(rect.centerX(), rect.bottom)
+                path.lineTo(rect.left, rect.centerY())
+                path.close()
+            }
+            "PENTAGON" -> createRegularPolygonPath(path, rect, 5)
+            "HEXAGON" -> createRegularPolygonPath(path, rect, 6)
+            "OCTAGON" -> createRegularPolygonPath(path, rect, 8)
+            "POLYGON" -> createRegularPolygonPath(path, rect, shape.polygonSides.coerceIn(3, 16))
+            "STAR" -> createStarPath(path, rect, shape.starPoints.coerceIn(3, 16), shape.starInnerRadiusRatio.coerceIn(0.1f, 0.9f))
+            "LINE", "DASHED_LINE", "DOTTED_LINE" -> {
+                path.moveTo(rect.left, rect.centerY())
+                path.lineTo(rect.right, rect.centerY())
+            }
+            "ARROW" -> {
+                val cy = rect.centerY()
+                val arrowHeadW = rect.height().coerceAtMost(rect.width() * 0.4f)
+                val arrowHeadH = rect.height() / 2f
+
+                path.moveTo(rect.left, cy)
+                path.lineTo(rect.right - arrowHeadW, cy)
+
+                path.moveTo(rect.right - arrowHeadW, cy - arrowHeadH)
+                path.lineTo(rect.right, cy)
+                path.lineTo(rect.right - arrowHeadW, cy + arrowHeadH)
+            }
+            "DOUBLE_ARROW" -> {
+                val cy = rect.centerY()
+                val arrowHeadW = rect.height().coerceAtMost(rect.width() * 0.35f)
+                val arrowHeadH = rect.height() / 2f
+
+                // Left Arrow Head
+                path.moveTo(rect.left + arrowHeadW, cy - arrowHeadH)
+                path.lineTo(rect.left, cy)
+                path.lineTo(rect.left + arrowHeadW, cy + arrowHeadH)
+
+                // Shaft
+                path.moveTo(rect.left, cy)
+                path.lineTo(rect.right, cy)
+
+                // Right Arrow Head
+                path.moveTo(rect.right - arrowHeadW, cy - arrowHeadH)
+                path.lineTo(rect.right, cy)
+                path.lineTo(rect.right - arrowHeadW, cy + arrowHeadH)
+            }
+            "CUSTOM_POLYGON", "FREEFORM_PATH", "BEZIER_PATH" -> {
+                if (!shape.customPathData.isNullOrBlank()) {
+                    parseCustomNormalizedPath(path, rect, shape.customPathData)
+                } else {
+                    path.addRect(rect, Path.Direction.CW)
+                }
+            }
+            else -> {
+                path.addRect(rect, Path.Direction.CW)
+            }
+        }
+
+        return path
+    }
+
+    private fun createRegularPolygonPath(path: Path, rect: RectF, sides: Int) {
+        val cx = rect.centerX()
+        val cy = rect.centerY()
+        val rx = rect.width() / 2f
+        val ry = rect.height() / 2f
+
+        for (i in 0 until sides) {
+            val angleRad = Math.toRadians((360.0 / sides * i) - 90.0)
+            val px = cx + (rx * Math.cos(angleRad)).toFloat()
+            val py = cy + (ry * Math.sin(angleRad)).toFloat()
+            if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+        }
+        path.close()
+    }
+
+    private fun createStarPath(path: Path, rect: RectF, points: Int, innerRadiusRatio: Float) {
+        val cx = rect.centerX()
+        val cy = rect.centerY()
+        val rx = rect.width() / 2f
+        val ry = rect.height() / 2f
+        val innerRx = rx * innerRadiusRatio
+        val innerRy = ry * innerRadiusRatio
+
+        val totalPoints = points * 2
+        for (i in 0 until totalPoints) {
+            val isOuter = i % 2 == 0
+            val currentRx = if (isOuter) rx else innerRx
+            val currentRy = if (isOuter) ry else innerRy
+            val angleRad = Math.toRadians((360.0 / totalPoints * i) - 90.0)
+            val px = cx + (currentRx * Math.cos(angleRad)).toFloat()
+            val py = cy + (currentRy * Math.sin(angleRad)).toFloat()
+            if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+        }
+        path.close()
+    }
+
+    private fun parseCustomNormalizedPath(path: Path, rect: RectF, customData: String) {
+        try {
+            val points = customData.split(";").mapNotNull { ptStr ->
+                val coords = ptStr.trim().split(",")
+                if (coords.size == 2) {
+                    val nx = coords[0].toFloatOrNull()
+                    val ny = coords[1].toFloatOrNull()
+                    if (nx != null && ny != null) Pair(nx, ny) else null
+                } else null
+            }
+
+            if (points.isNotEmpty()) {
+                points.forEachIndexed { idx, (nx, ny) ->
+                    val px = rect.left + (nx * rect.width())
+                    val py = rect.top + (ny * rect.height())
+                    if (idx == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                }
+                path.close()
+            } else {
+                path.addRect(rect, Path.Direction.CW)
+            }
+        } catch (e: Exception) {
+            path.addRect(rect, Path.Direction.CW)
         }
     }
 }

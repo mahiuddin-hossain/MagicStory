@@ -595,6 +595,360 @@ class EditorViewModel(
         )
     }
 
+    fun addShapeElement(shapeType: String) {
+        val currentState = _state.value ?: return
+        val currentElements = currentState.template.elements
+
+        val maxZ = (currentElements.maxOfOrNull { currentState.getElementZIndex(it.id, it.zIndex) } ?: 0) + 10
+        val timestamp = System.currentTimeMillis() % 100000
+        val newId = "shape_${shapeType.lowercase()}_$timestamp"
+
+        val cornerRadius = if (shapeType.equals("ROUNDED_RECTANGLE", ignoreCase = true)) 16f else 0f
+        val initX = 0.35f
+        val initY = 0.38f
+        val initW = 0.3f
+        val initH = 0.24f
+
+        val newShape = TemplateElement.Shape(
+            id = newId,
+            zIndex = maxZ,
+            visible = true,
+            opacity = 1.0f,
+            x = initX,
+            y = initY,
+            width = initW,
+            height = initH,
+            rotation = 0f,
+            shapeType = shapeType.uppercase(),
+            color = "#C91F2C",
+            cornerRadius = cornerRadius
+        )
+
+        val newPositions = currentState.elementPositions.toMutableMap().apply {
+            put(newId, Pair(initX, initY))
+        }
+        val newSizes = currentState.elementSizes.toMutableMap().apply {
+            put(newId, Pair(initW, initH))
+        }
+        val newZOrders = currentState.elementZOrders.toMutableMap().apply {
+            put(newId, maxZ)
+        }
+
+        val updatedManifest = currentState.template.copy(
+            elements = currentState.template.elements + newShape
+        )
+
+        pushState(
+            currentState.copy(template = updatedManifest, selectedElementId = newId),
+            currentState.editedTexts,
+            currentState.photoUris,
+            newPositions,
+            newSizes,
+            currentState.elementRotations,
+            currentState.elementFlips,
+            currentState.textFontSizes,
+            currentState.textColors,
+            currentState.textFontWeights,
+            currentState.textAlignments,
+            currentState.textLetterSpacings,
+            currentState.textLineSpacings,
+            currentState.textCases,
+            currentState.textBgColors,
+            currentState.textShadowColors,
+            currentState.textFontFamilies,
+            currentState.customFontUris,
+            currentState.lockedElementIds,
+            currentState.hiddenElementIds,
+            newZOrders,
+            currentState.bgGradientConfig,
+            currentState.bgTextureType,
+            currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
+            currentState.deletedElementIds
+        )
+    }
+
+    fun addImageElement(uri: Uri) {
+        val currentState = _state.value ?: return
+        val currentElements = currentState.template.elements
+
+        val maxZ = (currentElements.maxOfOrNull { currentState.getElementZIndex(it.id, it.zIndex) } ?: 0) + 10
+        val timestamp = System.currentTimeMillis() % 100000
+        val newId = "inserted_photo_$timestamp"
+
+        val initX = 0.25f
+        val initY = 0.28f
+        val initW = 0.5f
+        val initH = 0.35f
+
+        val newPhotoSlot = TemplateElement.PhotoSlot(
+            id = newId,
+            zIndex = maxZ,
+            visible = true,
+            opacity = 1.0f,
+            x = initX,
+            y = initY,
+            width = initW,
+            height = initH,
+            rotation = 0f,
+            defaultAsset = uri.toString(),
+            cornerRadius = 12f,
+            fitMode = "COVER",
+            label = "Inserted Image"
+        )
+
+        val newPhotoUris = currentState.photoUris.toMutableMap().apply {
+            put(newId, uri.toString())
+        }
+        val newPositions = currentState.elementPositions.toMutableMap().apply {
+            put(newId, Pair(initX, initY))
+        }
+        val newSizes = currentState.elementSizes.toMutableMap().apply {
+            put(newId, Pair(initW, initH))
+        }
+        val newZOrders = currentState.elementZOrders.toMutableMap().apply {
+            put(newId, maxZ)
+        }
+
+        val updatedManifest = currentState.template.copy(
+            elements = currentState.template.elements + newPhotoSlot
+        )
+
+        pushState(
+            currentState.copy(template = updatedManifest, selectedElementId = newId),
+            currentState.editedTexts,
+            newPhotoUris,
+            newPositions,
+            newSizes,
+            currentState.elementRotations,
+            currentState.elementFlips,
+            currentState.textFontSizes,
+            currentState.textColors,
+            currentState.textFontWeights,
+            currentState.textAlignments,
+            currentState.textLetterSpacings,
+            currentState.textLineSpacings,
+            currentState.textCases,
+            currentState.textBgColors,
+            currentState.textShadowColors,
+            currentState.textFontFamilies,
+            currentState.customFontUris,
+            currentState.lockedElementIds,
+            currentState.hiddenElementIds,
+            newZOrders,
+            currentState.bgGradientConfig,
+            currentState.bgTextureType,
+            currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
+            currentState.deletedElementIds
+        )
+    }
+
+    fun updateShapeType(elementId: String, shapeType: String) {
+        val currentState = _state.value ?: return
+        val elements = currentState.template.elements.map { elem ->
+            if (elem.id == elementId && elem is TemplateElement.Shape) {
+                elem.copy(shapeType = shapeType.uppercase())
+            } else {
+                elem
+            }
+        }
+        val updatedManifest = currentState.template.copy(elements = elements)
+        _state.value = currentState.copy(template = updatedManifest)
+        commitGestureEnd()
+    }
+
+    fun updateShapeCornerRadius(elementId: String, radiusDp: Float) {
+        val currentState = _state.value ?: return
+        val elements = currentState.template.elements.map { elem ->
+            if (elem.id == elementId && elem is TemplateElement.Shape) {
+                elem.copy(
+                    cornerRadius = radiusDp,
+                    topLeftRadius = radiusDp,
+                    topRightRadius = radiusDp,
+                    bottomRightRadius = radiusDp,
+                    bottomLeftRadius = radiusDp,
+                    isCornerLinked = true
+                )
+            } else {
+                elem
+            }
+        }
+        val updatedManifest = currentState.template.copy(elements = elements)
+        _state.value = currentState.copy(template = updatedManifest)
+        commitGestureEnd()
+    }
+
+    fun updateShapeCornerRadii(
+        elementId: String,
+        topLeftDp: Float,
+        topRightDp: Float,
+        bottomRightDp: Float,
+        bottomLeftDp: Float,
+        isLinked: Boolean
+    ) {
+        val currentState = _state.value ?: return
+        val elements = currentState.template.elements.map { elem ->
+            if (elem.id == elementId && elem is TemplateElement.Shape) {
+                elem.copy(
+                    topLeftRadius = topLeftDp,
+                    topRightRadius = topRightDp,
+                    bottomRightRadius = bottomRightDp,
+                    bottomLeftRadius = bottomLeftDp,
+                    isCornerLinked = isLinked
+                )
+            } else {
+                elem
+            }
+        }
+        val updatedManifest = currentState.template.copy(elements = elements)
+        _state.value = currentState.copy(template = updatedManifest)
+        commitGestureEnd()
+    }
+
+    fun updateShapeGeometry(
+        elementId: String,
+        polygonSides: Int = 5,
+        starPoints: Int = 5,
+        starInnerRadiusRatio: Float = 0.5f,
+        customPathData: String? = null
+    ) {
+        val currentState = _state.value ?: return
+        val elements = currentState.template.elements.map { elem ->
+            if (elem.id == elementId && elem is TemplateElement.Shape) {
+                elem.copy(
+                    polygonSides = polygonSides.coerceIn(3, 16),
+                    starPoints = starPoints.coerceIn(3, 16),
+                    starInnerRadiusRatio = starInnerRadiusRatio.coerceIn(0.1f, 0.9f),
+                    customPathData = customPathData ?: elem.customPathData
+                )
+            } else {
+                elem
+            }
+        }
+        val updatedManifest = currentState.template.copy(elements = elements)
+        _state.value = currentState.copy(template = updatedManifest)
+        commitGestureEnd()
+    }
+
+    fun updateShapeStrokeStyle(
+        elementId: String,
+        strokeStyle: String = "SOLID",
+        strokeCap: String = "BUTT",
+        strokeJoin: String = "MITER",
+        strokeOpacity: Float = 1.0f
+    ) {
+        val currentState = _state.value ?: return
+        val elements = currentState.template.elements.map { elem ->
+            if (elem.id == elementId && elem is TemplateElement.Shape) {
+                elem.copy(
+                    strokeStyle = strokeStyle.uppercase(),
+                    strokeCap = strokeCap.uppercase(),
+                    strokeJoin = strokeJoin.uppercase(),
+                    strokeOpacity = strokeOpacity.coerceIn(0f, 1f)
+                )
+            } else {
+                elem
+            }
+        }
+        val updatedManifest = currentState.template.copy(elements = elements)
+        _state.value = currentState.copy(template = updatedManifest)
+        commitGestureEnd()
+    }
+
+    fun updateShapeTransform(
+        elementId: String,
+        x: Float? = null,
+        y: Float? = null,
+        width: Float? = null,
+        height: Float? = null,
+        scaleX: Float? = null,
+        scaleY: Float? = null,
+        skewX: Float? = null,
+        skewY: Float? = null,
+        rotation: Float? = null,
+        isConstrained: Boolean? = null
+    ) {
+        val currentState = _state.value ?: return
+        val elements = currentState.template.elements.map { elem ->
+            if (elem.id == elementId && elem is TemplateElement.Shape) {
+                elem.copy(
+                    x = x ?: elem.x,
+                    y = y ?: elem.y,
+                    width = width ?: elem.width,
+                    height = height ?: elem.height,
+                    scaleX = scaleX ?: elem.scaleX,
+                    scaleY = scaleY ?: elem.scaleY,
+                    skewX = skewX ?: elem.skewX,
+                    skewY = skewY ?: elem.skewY,
+                    rotation = rotation ?: elem.rotation,
+                    isConstrained = isConstrained ?: elem.isConstrained
+                )
+            } else {
+                elem
+            }
+        }
+        val newPositions = if (x != null || y != null) {
+            currentState.elementPositions.toMutableMap().apply {
+                put(elementId, Pair(x ?: currentState.getElementX(elementId, 0f), y ?: currentState.getElementY(elementId, 0f)))
+            }
+        } else currentState.elementPositions
+
+        val newSizes = if (width != null || height != null) {
+            currentState.elementSizes.toMutableMap().apply {
+                put(elementId, Pair(width ?: currentState.getElementW(elementId, 0.1f), height ?: currentState.getElementH(elementId, 0.1f)))
+            }
+        } else currentState.elementSizes
+
+        val newRotations = if (rotation != null) {
+            currentState.elementRotations.toMutableMap().apply {
+                put(elementId, rotation)
+            }
+        } else currentState.elementRotations
+
+        val updatedManifest = currentState.template.copy(elements = elements)
+        _state.value = currentState.copy(
+            template = updatedManifest,
+            elementPositions = newPositions,
+            elementSizes = newSizes,
+            elementRotations = newRotations
+        )
+        commitGestureEnd()
+    }
+
+    fun updateShapeFillType(elementId: String, fillType: String) {
+        val currentState = _state.value ?: return
+        val elements = currentState.template.elements.map { elem ->
+            if (elem.id == elementId && elem is TemplateElement.Shape) {
+                elem.copy(fillType = fillType.uppercase())
+            } else {
+                elem
+            }
+        }
+        val updatedManifest = currentState.template.copy(elements = elements)
+        _state.value = currentState.copy(template = updatedManifest)
+        commitGestureEnd()
+    }
+
+    fun swapShapeFillAndStroke(elementId: String) {
+        val currentState = _state.value ?: return
+        val shape = currentState.template.elements.find { it.id == elementId } as? TemplateElement.Shape ?: return
+
+        val currentFill = currentState.getTextColor(elementId, shape.color)
+        val currentStroke = currentState.getElementStroke(elementId)
+
+        val newStrokeHex = currentFill
+        val newFillHex = currentStroke?.first ?: shape.borderColor ?: "#C91F2C"
+        val strokeW = currentStroke?.second ?: (if (shape.borderWidth > 0f) shape.borderWidth else 4f)
+
+        updateTextColor(elementId, newFillHex)
+        updateElementStroke(elementId, newStrokeHex, strokeW)
+    }
+
     fun addSavedSwatch(colorHex: String) {
         val currentState = _state.value ?: return
         val newSwatches = (listOf(colorHex) + currentState.savedSwatches).distinct().take(15)

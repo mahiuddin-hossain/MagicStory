@@ -298,8 +298,8 @@ fun TemplateCanvasPreview(
         Box(
             modifier = Modifier
                 .aspectRatio(animatedAspectRatio)
-                .shadow(elevation = 12.dp, shape = RoundedCornerShape(16.dp), ambientColor = SoftRedShadow, spotColor = SoftRedShadow)
-                .clip(RoundedCornerShape(16.dp))
+                .shadow(elevation = 3.dp, shape = RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(Color.White)
         ) {
             Canvas(
@@ -334,7 +334,9 @@ private fun findHitElementAndHandle(
     canvasW: Float,
     canvasH: Float
 ): Pair<String?, TouchHandle> {
-    val sortedElements = manifest.elements.filter { it.visible && !editorState.isElementDeleted(it.id) }.sortedByDescending { it.zIndex }
+    val sortedElements = manifest.elements
+        .filter { it.visible && !editorState.isElementDeleted(it.id) }
+        .sortedByDescending { editorState.getElementZIndex(it.id, it.zIndex) }
 
     val scaleFactor = canvasW / manifest.referenceWidth.toFloat()
     val touchPxX = normX * canvasW
@@ -399,22 +401,35 @@ private fun checkElementHandleHit(
     val w2 = elemW / 2f
     val h2 = elemH / 2f
 
-    val hitRadius = 24f * scaleFactor
+    val isSelected = editorState.isElementSelected(element.id)
+    val isLocked = editorState.isElementLocked(element.id)
 
-    val stemTopY = -h2 - 28f * scaleFactor
-    if (distSq(lx, ly, 0f, stemTopY) <= (hitRadius * 1.5f) * (hitRadius * 1.5f)) {
-        return TouchHandle.ROTATION
+    if (isLocked) {
+        if (lx in -w2..w2 && ly in -h2..h2) {
+            return TouchHandle.BODY
+        }
+        return TouchHandle.NONE
     }
 
-    if (distSq(lx, ly, -w2, -h2) <= hitRadius * hitRadius) return TouchHandle.TOP_LEFT
-    if (distSq(lx, ly, w2, -h2) <= hitRadius * hitRadius) return TouchHandle.TOP_RIGHT
-    if (distSq(lx, ly, -w2, h2) <= hitRadius * hitRadius) return TouchHandle.BOTTOM_LEFT
-    if (distSq(lx, ly, w2, h2) <= hitRadius * hitRadius) return TouchHandle.BOTTOM_RIGHT
+    // Only test corner/side resize handles & rotation stem if element is ALREADY selected
+    if (isSelected) {
+        val hitRadius = 24f * scaleFactor
 
-    if (distSq(lx, ly, -w2, 0f) <= hitRadius * hitRadius) return TouchHandle.LEFT
-    if (distSq(lx, ly, w2, 0f) <= hitRadius * hitRadius) return TouchHandle.RIGHT
-    if (distSq(lx, ly, 0f, -h2) <= hitRadius * hitRadius) return TouchHandle.TOP
-    if (distSq(lx, ly, 0f, h2) <= hitRadius * hitRadius) return TouchHandle.BOTTOM
+        val stemTopY = -h2 - 20f * scaleFactor
+        if (distSq(lx, ly, 0f, stemTopY) <= (hitRadius * 1.5f) * (hitRadius * 1.5f)) {
+            return TouchHandle.ROTATION
+        }
+
+        if (distSq(lx, ly, -w2, -h2) <= hitRadius * hitRadius) return TouchHandle.TOP_LEFT
+        if (distSq(lx, ly, w2, -h2) <= hitRadius * hitRadius) return TouchHandle.TOP_RIGHT
+        if (distSq(lx, ly, -w2, h2) <= hitRadius * hitRadius) return TouchHandle.BOTTOM_LEFT
+        if (distSq(lx, ly, w2, h2) <= hitRadius * hitRadius) return TouchHandle.BOTTOM_RIGHT
+
+        if (distSq(lx, ly, -w2, 0f) <= hitRadius * hitRadius) return TouchHandle.LEFT
+        if (distSq(lx, ly, w2, 0f) <= hitRadius * hitRadius) return TouchHandle.RIGHT
+        if (distSq(lx, ly, 0f, -h2) <= hitRadius * hitRadius) return TouchHandle.TOP
+        if (distSq(lx, ly, 0f, h2) <= hitRadius * hitRadius) return TouchHandle.BOTTOM
+    }
 
     if (lx in -w2..w2 && ly in -h2..h2) {
         return TouchHandle.BODY

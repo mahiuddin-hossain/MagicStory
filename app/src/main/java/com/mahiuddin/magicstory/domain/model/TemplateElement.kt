@@ -47,11 +47,30 @@ sealed class TemplateElement {
         val width: Float,
         val height: Float,
         val rotation: Float = 0f,
-        val shapeType: String = "RECTANGLE", // RECTANGLE, ROUNDED_RECTANGLE, CIRCLE, LINE
-        val color: String = "#FFFFFF",
+        val scaleX: Float = 1.0f,
+        val scaleY: Float = 1.0f,
+        val skewX: Float = 0f,
+        val skewY: Float = 0f,
+        val isConstrained: Boolean = false,
+        val shapeType: String = "RECTANGLE",
+        val fillType: String = "SOLID", // SOLID, GRADIENT, NONE
+        val color: String = "#C91F2C",
         val borderColor: String? = null,
         val borderWidth: Float = 0f,
+        val strokeStyle: String = "SOLID", // SOLID, DASHED, DOTTED
+        val strokeCap: String = "BUTT", // BUTT, ROUND, SQUARE
+        val strokeJoin: String = "MITER", // MITER, ROUND, BEVEL
+        val strokeOpacity: Float = 1.0f,
         val cornerRadius: Float = 0f,
+        val topLeftRadius: Float = 0f,
+        val topRightRadius: Float = 0f,
+        val bottomRightRadius: Float = 0f,
+        val bottomLeftRadius: Float = 0f,
+        val isCornerLinked: Boolean = true,
+        val polygonSides: Int = 5,
+        val starPoints: Int = 5,
+        val starInnerRadiusRatio: Float = 0.5f,
+        val customPathData: String? = null,
         val shadowColor: String? = null,
         val shadowRadius: Float = 0f,
         val shadowDx: Float = 0f,
