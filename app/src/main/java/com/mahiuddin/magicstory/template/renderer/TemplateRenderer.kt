@@ -978,11 +978,11 @@ object TemplateRenderer {
 
         val primaryAccentColor = safeParseColor("#C91F2C")
 
-        // 1. Crisp 1.5dp selection outline
+        // 1. Crisp 2.2dp selection outline
         val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = primaryAccentColor
             style = Paint.Style.STROKE
-            strokeWidth = 1.5f * scaleFactor
+            strokeWidth = 2.2f * scaleFactor
         }
         canvas.drawRect(rect, strokePaint)
 
@@ -994,15 +994,15 @@ object TemplateRenderer {
         val handleBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = primaryAccentColor
             style = Paint.Style.STROKE
-            strokeWidth = 1.5f * scaleFactor
+            strokeWidth = 2.0f * scaleFactor
         }
         val handleCorePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = primaryAccentColor
             style = Paint.Style.FILL
         }
 
-        // 2. Corner transform handles (5.5dp radius)
-        val cornerRadius = 5.5f * scaleFactor
+        // 2. Corner transform handles (8.5dp radius - large & prominent)
+        val cornerRadius = 8.5f * scaleFactor
         val corners = arrayOf(
             Pair(rect.left, rect.top),
             Pair(rect.right, rect.top),
@@ -1016,8 +1016,8 @@ object TemplateRenderer {
             canvas.drawCircle(cx, cy, cornerRadius * 0.45f, handleCorePaint)
         }
 
-        // 3. Side edge resize handles (4.0dp radius)
-        val sideRadius = 4.0f * scaleFactor
+        // 3. Side edge resize handles (6.0dp radius)
+        val sideRadius = 6.0f * scaleFactor
         val sideEdges = arrayOf(
             Pair(rect.left, rect.centerY()),
             Pair(rect.right, rect.centerY()),
@@ -1031,18 +1031,19 @@ object TemplateRenderer {
 
         // 4. Top Rotation Stem & Handle Node
         val topCenterX = rect.centerX()
-        val topCenterY = rect.top - (20f * scaleFactor)
+        val topCenterY = rect.top - (30f * scaleFactor)
 
         val stemPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = primaryAccentColor
             style = Paint.Style.STROKE
-            strokeWidth = 1.5f * scaleFactor
+            strokeWidth = 2.0f * scaleFactor
         }
         canvas.drawLine(rect.centerX(), rect.top, topCenterX, topCenterY, stemPaint)
 
-        canvas.drawCircle(topCenterX, topCenterY, cornerRadius * 1.15f, handleBgPaint)
-        canvas.drawCircle(topCenterX, topCenterY, cornerRadius * 1.15f, handleBorderPaint)
-        canvas.drawCircle(topCenterX, topCenterY, cornerRadius * 0.55f, handleCorePaint)
+        val rotationRadius = 12.0f * scaleFactor
+        canvas.drawCircle(topCenterX, topCenterY, rotationRadius, handleBgPaint)
+        canvas.drawCircle(topCenterX, topCenterY, rotationRadius, handleBorderPaint)
+        canvas.drawCircle(topCenterX, topCenterY, rotationRadius * 0.6f, handleCorePaint)
     }
 
     fun sampleColorAt(

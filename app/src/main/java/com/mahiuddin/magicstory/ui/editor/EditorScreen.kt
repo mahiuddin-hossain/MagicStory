@@ -72,6 +72,7 @@ import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.TextFields
+import androidx.compose.material.icons.outlined.Title
 import androidx.compose.material.icons.outlined.Texture
 import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material.icons.outlined.Transform
@@ -596,54 +597,215 @@ fun EditorScreen(
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(top = 10.dp, bottom = 16.dp, start = 12.dp, end = 12.dp)
+                                        .padding(top = 8.dp, bottom = 12.dp, start = 8.dp, end = 8.dp)
                                 ) {
-                                    // Header Bar: Element Label, Lock Toggle, Duplicate, Delete
+                                    // Single Unified Horizontal Scrolling Action Bar (All icons scroll together)
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(horizontal = 8.dp, vertical = 2.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                            .horizontalScroll(rememberScrollState())
+                                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        val label = getElementLabel(selectedElem, selectedId)
-                                        Text(
-                                            text = if (isLocked) "$label 🔒" else label,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = Color(0xFF202020),
-                                            fontSize = 13.sp
-                                        )
+                                        // Edit Text Content (if text element)
+                                        if (selectedElem is TemplateElement.Text || (selectedElem is TemplateElement.PhotoCard && selectedId == selectedElem.captionId)) {
+                                            EditorActionIconBtn(
+                                                selected = textEditDialogVisible,
+                                                onClick = { textEditDialogVisible = true },
+                                                icon = Icons.Outlined.Edit,
+                                                contentDescription = "Edit Text"
+                                            )
+                                            EditorActionIconBtn(
+                                                selected = activeSubTool == ActiveSubTool.FONT_FAMILY,
+                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.FONT_FAMILY) ActiveSubTool.NONE else ActiveSubTool.FONT_FAMILY },
+                                                icon = Icons.Outlined.Title,
+                                                contentDescription = "Font Family"
+                                            )
+                                            EditorActionIconBtn(
+                                                selected = activeSubTool == ActiveSubTool.FONT_SIZE,
+                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.FONT_SIZE) ActiveSubTool.NONE else ActiveSubTool.FONT_SIZE },
+                                                icon = Icons.Outlined.FormatSize,
+                                                contentDescription = "Font Size"
+                                            )
+                                            EditorActionIconBtn(
+                                                selected = activeSubTool == ActiveSubTool.TEXT_COLOR,
+                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.TEXT_COLOR) ActiveSubTool.NONE else ActiveSubTool.TEXT_COLOR },
+                                                icon = Icons.Outlined.FormatColorFill,
+                                                contentDescription = "Color & Fill"
+                                            )
+                                            EditorActionIconBtn(
+                                                selected = activeSubTool == ActiveSubTool.TEXT_SPACING,
+                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.TEXT_SPACING) ActiveSubTool.NONE else ActiveSubTool.TEXT_SPACING },
+                                                icon = Icons.Outlined.FormatLineSpacing,
+                                                contentDescription = "Spacing"
+                                            )
+                                            EditorActionIconBtn(
+                                                selected = activeSubTool == ActiveSubTool.TEXT_BG,
+                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.TEXT_BG) ActiveSubTool.NONE else ActiveSubTool.TEXT_BG },
+                                                icon = Icons.Outlined.Palette,
+                                                contentDescription = "Text Highlight"
+                                            )
+                                        }
 
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            IconButton(onClick = { viewModel.toggleElementLock(selectedId) }) {
-                                                Icon(
-                                                    imageVector = if (isLocked) Icons.Outlined.Lock else Icons.Outlined.LockOpen,
-                                                    contentDescription = "Lock Element",
-                                                    tint = if (isLocked) PrimaryRed else Color(0xFF333333),
-                                                    modifier = Modifier.size(20.dp)
+                                        // Replace Photo (if Photo Slot / Card)
+                                        if (selectedElem is TemplateElement.PhotoSlot || (selectedElem is TemplateElement.PhotoCard && selectedId == selectedElem.photoSlotId)) {
+                                            EditorActionIconBtn(
+                                                selected = false,
+                                                onClick = {
+                                                    targetPhotoSlotId = selectedId
+                                                    photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                                },
+                                                icon = Icons.Outlined.Image,
+                                                contentDescription = "Replace Photo"
+                                            )
+                                        }
+
+                                        // Shape Controls
+                                        if (selectedElem is TemplateElement.Shape) {
+                                            EditorActionIconBtn(
+                                                selected = activeSubTool == ActiveSubTool.TEXT_COLOR,
+                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.TEXT_COLOR) ActiveSubTool.NONE else ActiveSubTool.TEXT_COLOR },
+                                                icon = Icons.Outlined.Palette,
+                                                contentDescription = "Fill Color"
+                                            )
+                                            EditorActionIconBtn(
+                                                selected = activeSubTool == ActiveSubTool.SHAPE_TYPE,
+                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.SHAPE_TYPE) ActiveSubTool.NONE else ActiveSubTool.SHAPE_TYPE },
+                                                icon = Icons.Outlined.Category,
+                                                contentDescription = "Shape Type"
+                                            )
+
+                                            val shapeTypeStr = selectedElem.shapeType.uppercase()
+                                            if (shapeTypeStr == "RECTANGLE" || shapeTypeStr == "ROUNDED_RECTANGLE") {
+                                                EditorActionIconBtn(
+                                                    selected = activeSubTool == ActiveSubTool.CORNER_RADIUS,
+                                                    onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.CORNER_RADIUS) ActiveSubTool.NONE else ActiveSubTool.CORNER_RADIUS },
+                                                    icon = Icons.Outlined.RoundedCorner,
+                                                    contentDescription = "Corners"
                                                 )
                                             }
-                                            if (selectedElem !is TemplateElement.Background) {
-                                                IconButton(onClick = { viewModel.duplicateElement(selectedId) }) {
-                                                    Icon(imageVector = Icons.Outlined.ContentCopy, contentDescription = "Duplicate", tint = Color(0xFF333333), modifier = Modifier.size(20.dp))
-                                                }
-                                                IconButton(onClick = { viewModel.deleteElement(selectedId) }) {
-                                                    Icon(imageVector = Icons.Outlined.Delete, contentDescription = "Delete", tint = PrimaryRed, modifier = Modifier.size(20.dp))
-                                                }
+                                            if (shapeTypeStr == "POLYGON" || shapeTypeStr == "STAR") {
+                                                EditorActionIconBtn(
+                                                    selected = activeSubTool == ActiveSubTool.GEOMETRY,
+                                                    onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.GEOMETRY) ActiveSubTool.NONE else ActiveSubTool.GEOMETRY },
+                                                    icon = Icons.Outlined.Star,
+                                                    contentDescription = "Geometry"
+                                                )
                                             }
-                                            IconButton(onClick = {
+
+                                            EditorActionIconBtn(
+                                                selected = activeSubTool == ActiveSubTool.STROKE_ADVANCED,
+                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.STROKE_ADVANCED) ActiveSubTool.NONE else ActiveSubTool.STROKE_ADVANCED },
+                                                icon = Icons.Outlined.BorderColor,
+                                                contentDescription = "Stroke"
+                                            )
+                                            EditorActionIconBtn(
+                                                selected = false,
+                                                onClick = { viewModel.swapShapeFillAndStroke(selectedId) },
+                                                icon = Icons.Outlined.SwapHoriz,
+                                                contentDescription = "Swap Fill/Stroke"
+                                            )
+                                        }
+
+                                        // Background Controls
+                                        if (selectedElem is TemplateElement.Background || selectedId == "bg") {
+                                            EditorActionIconBtn(
+                                                selected = activeSubTool == ActiveSubTool.TEXT_COLOR,
+                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.TEXT_COLOR) ActiveSubTool.NONE else ActiveSubTool.TEXT_COLOR },
+                                                icon = Icons.Outlined.Palette,
+                                                contentDescription = "Canvas Color"
+                                            )
+                                            EditorActionIconBtn(
+                                                selected = activeSubTool == ActiveSubTool.BG_TEXTURE,
+                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.BG_TEXTURE) ActiveSubTool.NONE else ActiveSubTool.BG_TEXTURE },
+                                                icon = Icons.Outlined.Texture,
+                                                contentDescription = "Texture"
+                                            )
+                                        }
+
+                                        // Common Controls: Opacity, Effects, Rotate, Flip, Transform Precision
+                                        if (selectedElem !is TemplateElement.Background) {
+                                            EditorActionIconBtn(
+                                                selected = activeSubTool == ActiveSubTool.OPACITY,
+                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.OPACITY) ActiveSubTool.NONE else ActiveSubTool.OPACITY },
+                                                icon = Icons.Outlined.Opacity,
+                                                contentDescription = "Opacity"
+                                            )
+                                            EditorActionIconBtn(
+                                                selected = activeSubTool == ActiveSubTool.EFFECTS,
+                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.EFFECTS) ActiveSubTool.NONE else ActiveSubTool.EFFECTS },
+                                                icon = Icons.Outlined.Tune,
+                                                contentDescription = "Effects"
+                                            )
+                                            EditorActionIconBtn(
+                                                selected = activeSubTool == ActiveSubTool.ROTATE,
+                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.ROTATE) ActiveSubTool.NONE else ActiveSubTool.ROTATE },
+                                                icon = Icons.AutoMirrored.Outlined.RotateRight,
+                                                contentDescription = "Rotate"
+                                            )
+                                            EditorActionIconBtn(
+                                                selected = state.getFlipX(selectedId),
+                                                onClick = { viewModel.toggleElementFlipX(selectedId) },
+                                                icon = Icons.Outlined.SwapHoriz,
+                                                contentDescription = "Flip H"
+                                            )
+                                            EditorActionIconBtn(
+                                                selected = state.getFlipY(selectedId),
+                                                onClick = { viewModel.toggleElementFlipY(selectedId) },
+                                                icon = Icons.Outlined.SwapVert,
+                                                contentDescription = "Flip V"
+                                            )
+                                            EditorActionIconBtn(
+                                                selected = showTransformPrecisionDialog,
+                                                onClick = { showTransformPrecisionDialog = true },
+                                                icon = Icons.Outlined.Transform,
+                                                contentDescription = "Precision"
+                                            )
+                                        }
+
+                                        // Vertical Divider separating tools from layer actions
+                                        Spacer(
+                                            modifier = Modifier
+                                                .padding(horizontal = 4.dp)
+                                                .width(1.dp)
+                                                .height(24.dp)
+                                                .background(Color(0xFFE0E0E0))
+                                        )
+
+                                        // Layer Actions (Lock, Duplicate, Delete, Close)
+                                        EditorActionIconBtn(
+                                            selected = isLocked,
+                                            onClick = { viewModel.toggleElementLock(selectedId) },
+                                            icon = if (isLocked) Icons.Outlined.Lock else Icons.Outlined.LockOpen,
+                                            contentDescription = "Lock"
+                                        )
+                                        if (selectedElem !is TemplateElement.Background) {
+                                            EditorActionIconBtn(
+                                                selected = false,
+                                                onClick = { viewModel.duplicateElement(selectedId) },
+                                                icon = Icons.Outlined.ContentCopy,
+                                                contentDescription = "Duplicate"
+                                            )
+                                            EditorActionIconBtn(
+                                                selected = false,
+                                                onClick = { viewModel.deleteElement(selectedId) },
+                                                icon = Icons.Outlined.Delete,
+                                                contentDescription = "Delete"
+                                            )
+                                        }
+                                        EditorActionIconBtn(
+                                            selected = false,
+                                            onClick = {
                                                 viewModel.selectElement(null)
                                                 activeSubTool = ActiveSubTool.NONE
-                                            }) {
-                                                Icon(imageVector = Icons.Outlined.Close, contentDescription = "Close", tint = Color(0xFF777777), modifier = Modifier.size(20.dp))
-                                            }
-                                        }
+                                            },
+                                            icon = Icons.Outlined.Close,
+                                            contentDescription = "Close"
+                                        )
                                     }
 
-                                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = Color(0xFFEAEAEA), thickness = 1.dp)
-
-                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Spacer(modifier = Modifier.height(8.dp))
 
                                     // Sub-Tool Expansion Panel
                                     when (activeSubTool) {
@@ -1344,171 +1506,7 @@ fun EditorScreen(
 
                                     Spacer(modifier = Modifier.height(6.dp))
 
-                                    // Contextual Action Buttons Row
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .horizontalScroll(rememberScrollState())
-                                            .padding(horizontal = 4.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        // Edit Text Content (if text element)
-                                        if (selectedElem is TemplateElement.Text || (selectedElem is TemplateElement.PhotoCard && selectedId == selectedElem.captionId)) {
-                                            FilterChip(
-                                                selected = textEditDialogVisible,
-                                                onClick = { textEditDialogVisible = true },
-                                                label = { Text("Edit Text", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                                                leadingIcon = { Icon(imageVector = Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White)
-                                            )
-                                            FilterChip(
-                                                selected = activeSubTool == ActiveSubTool.FONT_FAMILY,
-                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.FONT_FAMILY) ActiveSubTool.NONE else ActiveSubTool.FONT_FAMILY },
-                                                label = { Text("Font Family", fontSize = 11.sp) },
-                                                leadingIcon = { Icon(imageVector = Icons.Outlined.TextFields, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                                            )
-                                            FilterChip(
-                                                selected = activeSubTool == ActiveSubTool.FONT_SIZE,
-                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.FONT_SIZE) ActiveSubTool.NONE else ActiveSubTool.FONT_SIZE },
-                                                label = { Text("Font Size", fontSize = 11.sp) },
-                                                leadingIcon = { Icon(imageVector = Icons.Outlined.FormatSize, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                                            )
-                                            FilterChip(
-                                                selected = activeSubTool == ActiveSubTool.TEXT_COLOR,
-                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.TEXT_COLOR) ActiveSubTool.NONE else ActiveSubTool.TEXT_COLOR },
-                                                label = { Text("Color & Fill", fontSize = 11.sp) },
-                                                leadingIcon = { Icon(imageVector = Icons.Outlined.FormatColorFill, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                                            )
-                                            FilterChip(
-                                                selected = activeSubTool == ActiveSubTool.TEXT_SPACING,
-                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.TEXT_SPACING) ActiveSubTool.NONE else ActiveSubTool.TEXT_SPACING },
-                                                label = { Text("Spacing", fontSize = 11.sp) },
-                                                leadingIcon = { Icon(imageVector = Icons.Outlined.FormatLineSpacing, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                                            )
-                                            FilterChip(
-                                                selected = activeSubTool == ActiveSubTool.TEXT_BG,
-                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.TEXT_BG) ActiveSubTool.NONE else ActiveSubTool.TEXT_BG },
-                                                label = { Text("Text Highlight", fontSize = 11.sp) }
-                                            )
-                                        }
 
-                                        // Replace Photo (if Photo Slot / Card)
-                                        if (selectedElem is TemplateElement.PhotoSlot || (selectedElem is TemplateElement.PhotoCard && selectedId == selectedElem.photoSlotId)) {
-                                            FilterChip(
-                                                selected = false,
-                                                onClick = {
-                                                    targetPhotoSlotId = selectedId
-                                                    photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                                                },
-                                                label = { Text("Replace Photo", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                                                leadingIcon = { Icon(imageVector = Icons.Outlined.Image, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White)
-                                            )
-                                        }
-
-                                        // Shape Controls
-                                        if (selectedElem is TemplateElement.Shape) {
-                                            FilterChip(
-                                                selected = activeSubTool == ActiveSubTool.TEXT_COLOR,
-                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.TEXT_COLOR) ActiveSubTool.NONE else ActiveSubTool.TEXT_COLOR },
-                                                label = { Text("Fill Color", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                                                leadingIcon = { Icon(imageVector = Icons.Outlined.Palette, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                                            )
-                                            FilterChip(
-                                                selected = activeSubTool == ActiveSubTool.SHAPE_TYPE,
-                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.SHAPE_TYPE) ActiveSubTool.NONE else ActiveSubTool.SHAPE_TYPE },
-                                                label = { Text("Shape Type", fontSize = 11.sp) },
-                                                leadingIcon = { Icon(imageVector = Icons.Outlined.Category, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                                            )
-
-                                            val shapeTypeStr = selectedElem.shapeType.uppercase()
-                                            if (shapeTypeStr == "RECTANGLE" || shapeTypeStr == "ROUNDED_RECTANGLE") {
-                                                FilterChip(
-                                                    selected = activeSubTool == ActiveSubTool.CORNER_RADIUS,
-                                                    onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.CORNER_RADIUS) ActiveSubTool.NONE else ActiveSubTool.CORNER_RADIUS },
-                                                    label = { Text("Corners", fontSize = 11.sp) },
-                                                    leadingIcon = { Icon(imageVector = Icons.Outlined.RoundedCorner, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                                                )
-                                            }
-                                            if (shapeTypeStr == "POLYGON" || shapeTypeStr == "STAR") {
-                                                FilterChip(
-                                                    selected = activeSubTool == ActiveSubTool.GEOMETRY,
-                                                    onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.GEOMETRY) ActiveSubTool.NONE else ActiveSubTool.GEOMETRY },
-                                                    label = { Text("Geometry", fontSize = 11.sp) },
-                                                    leadingIcon = { Icon(imageVector = Icons.Outlined.Star, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                                                )
-                                            }
-
-                                            FilterChip(
-                                                selected = activeSubTool == ActiveSubTool.STROKE_ADVANCED,
-                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.STROKE_ADVANCED) ActiveSubTool.NONE else ActiveSubTool.STROKE_ADVANCED },
-                                                label = { Text("Stroke", fontSize = 11.sp) },
-                                                leadingIcon = { Icon(imageVector = Icons.Outlined.BorderColor, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                                            )
-                                            FilterChip(
-                                                selected = false,
-                                                onClick = { viewModel.swapShapeFillAndStroke(selectedId) },
-                                                label = { Text("Swap Fill/Stroke ⇄", fontSize = 10.sp) }
-                                            )
-                                        }
-
-                                        // Background Controls
-                                        if (selectedElem is TemplateElement.Background || selectedId == "bg") {
-                                            FilterChip(
-                                                selected = activeSubTool == ActiveSubTool.TEXT_COLOR,
-                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.TEXT_COLOR) ActiveSubTool.NONE else ActiveSubTool.TEXT_COLOR },
-                                                label = { Text("Canvas Color", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                                                leadingIcon = { Icon(imageVector = Icons.Outlined.Palette, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                                            )
-                                            FilterChip(
-                                                selected = activeSubTool == ActiveSubTool.BG_TEXTURE,
-                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.BG_TEXTURE) ActiveSubTool.NONE else ActiveSubTool.BG_TEXTURE },
-                                                label = { Text("Texture", fontSize = 11.sp) },
-                                                leadingIcon = { Icon(imageVector = Icons.Outlined.Texture, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                                            )
-                                        }
-
-                                        // Common Controls: Opacity, Effects, Rotate, Flip, Transform Precision
-                                        if (selectedElem !is TemplateElement.Background) {
-                                            FilterChip(
-                                                selected = activeSubTool == ActiveSubTool.OPACITY,
-                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.OPACITY) ActiveSubTool.NONE else ActiveSubTool.OPACITY },
-                                                label = { Text("Opacity", fontSize = 11.sp) },
-                                                leadingIcon = { Icon(imageVector = Icons.Outlined.Opacity, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                                            )
-                                            FilterChip(
-                                                selected = activeSubTool == ActiveSubTool.EFFECTS,
-                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.EFFECTS) ActiveSubTool.NONE else ActiveSubTool.EFFECTS },
-                                                label = { Text("Effects", fontSize = 11.sp) },
-                                                leadingIcon = { Icon(imageVector = Icons.Outlined.Tune, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                                            )
-                                            FilterChip(
-                                                selected = activeSubTool == ActiveSubTool.ROTATE,
-                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.ROTATE) ActiveSubTool.NONE else ActiveSubTool.ROTATE },
-                                                label = { Text("Rotate", fontSize = 11.sp) },
-                                                leadingIcon = { Icon(imageVector = Icons.AutoMirrored.Outlined.RotateRight, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                                            )
-                                            FilterChip(
-                                                selected = state.getFlipX(selectedId),
-                                                onClick = { viewModel.toggleElementFlipX(selectedId) },
-                                                label = { Text("Flip H", fontSize = 11.sp) },
-                                                leadingIcon = { Icon(imageVector = Icons.Outlined.SwapHoriz, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                                            )
-                                            FilterChip(
-                                                selected = state.getFlipY(selectedId),
-                                                onClick = { viewModel.toggleElementFlipY(selectedId) },
-                                                label = { Text("Flip V", fontSize = 11.sp) },
-                                                leadingIcon = { Icon(imageVector = Icons.Outlined.SwapVert, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                                            )
-                                            FilterChip(
-                                                selected = showTransformPrecisionDialog,
-                                                onClick = { showTransformPrecisionDialog = true },
-                                                label = { Text("Precision", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                                                leadingIcon = { Icon(imageVector = Icons.Outlined.Transform, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                                            )
-                                        }
-                                    }
                                 }
                             }
                         }
@@ -1534,15 +1532,14 @@ fun EditorScreen(
     }
 
     // 2. Vector Shape Library Selection Dialog
-    if (showShapeLibraryDialog) {
-        ShapeSelectionDialog(
-            onDismiss = { showShapeLibraryDialog = false },
-            onShapeSelected = { shapeKey ->
-                viewModel.addShapeElement(shapeKey)
-                showShapeLibraryDialog = false
-            }
-        )
-    }
+    EditorVectorShapeManager(
+        showDialog = showShapeLibraryDialog,
+        onDismiss = { showShapeLibraryDialog = false },
+        onShapeSelected = { shapeKey ->
+            viewModel.addShapeElement(shapeKey)
+            showShapeLibraryDialog = false
+        }
+    )
 
     // 3. Illustrator-Style Transform Precision Dialog
     if (showTransformPrecisionDialog && state.selectedElementId != null) {
@@ -1556,7 +1553,7 @@ fun EditorScreen(
 
     // 4. PixelLab-Style Layer Stack Drawer
     if (showLayersDrawer) {
-        LayersDrawer(
+        EditorLayersPanel(
             editorState = state,
             viewModel = viewModel,
             onDismiss = { showLayersDrawer = false }
@@ -1635,676 +1632,4 @@ fun EditorScreen(
     }
 }
 
-// HELPER PANELS & COMPOSABLES
 
-@Composable
-fun CornerRadiusPanel(
-    shape: TemplateElement.Shape,
-    onUpdateSingleRadius: (Float) -> Unit,
-    onUpdateIndividualRadii: (Float, Float, Float, Float, Boolean) -> Unit
-) {
-    var isLinked by remember(shape) { mutableStateOf(shape.isCornerLinked) }
-    var singleRadius by remember(shape) { mutableFloatStateOf(if (shape.cornerRadius > 0f) shape.cornerRadius else 16f) }
-    var tl by remember(shape) { mutableFloatStateOf(shape.topLeftRadius) }
-    var tr by remember(shape) { mutableFloatStateOf(shape.topRightRadius) }
-    var br by remember(shape) { mutableFloatStateOf(shape.bottomRightRadius) }
-    var bl by remember(shape) { mutableFloatStateOf(shape.bottomLeftRadius) }
-
-    Column(modifier = Modifier.padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Corner Radius Mode", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF202020))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                FilterChip(
-                    selected = isLinked,
-                    onClick = {
-                        isLinked = true
-                        onUpdateSingleRadius(singleRadius)
-                    },
-                    label = { Text("Uniform 🔗", fontSize = 10.sp) },
-                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                FilterChip(
-                    selected = !isLinked,
-                    onClick = {
-                        isLinked = false
-                        onUpdateIndividualRadii(tl, tr, br, bl, false)
-                    },
-                    label = { Text("Individual 🔓", fontSize = 10.sp) },
-                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White)
-                )
-            }
-        }
-
-        if (isLinked) {
-            MinimalSlider(
-                value = singleRadius,
-                onValueChange = {
-                    singleRadius = it
-                    onUpdateSingleRadius(it)
-                },
-                valueRange = 0f..80f,
-                label = "All Corners",
-                valueFormatter = { "${it.toInt()} dp" }
-            )
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                MinimalSlider(
-                    value = tl,
-                    onValueChange = {
-                        tl = it
-                        onUpdateIndividualRadii(tl, tr, br, bl, false)
-                    },
-                    valueRange = 0f..80f,
-                    label = "Top-Left",
-                    valueFormatter = { "${it.toInt()} dp" }
-                )
-                MinimalSlider(
-                    value = tr,
-                    onValueChange = {
-                        tr = it
-                        onUpdateIndividualRadii(tl, tr, br, bl, false)
-                    },
-                    valueRange = 0f..80f,
-                    label = "Top-Right",
-                    valueFormatter = { "${it.toInt()} dp" }
-                )
-                MinimalSlider(
-                    value = br,
-                    onValueChange = {
-                        br = it
-                        onUpdateIndividualRadii(tl, tr, br, bl, false)
-                    },
-                    valueRange = 0f..80f,
-                    label = "Bottom-Right",
-                    valueFormatter = { "${it.toInt()} dp" }
-                )
-                MinimalSlider(
-                    value = bl,
-                    onValueChange = {
-                        bl = it
-                        onUpdateIndividualRadii(tl, tr, br, bl, false)
-                    },
-                    valueRange = 0f..80f,
-                    label = "Bottom-Left",
-                    valueFormatter = { "${it.toInt()} dp" }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun GeometryPanel(
-    shape: TemplateElement.Shape,
-    onUpdateGeometry: (Int, Int, Float) -> Unit
-) {
-    var sides by remember(shape) { mutableStateOf(shape.polygonSides.toFloat()) }
-    var points by remember(shape) { mutableStateOf(shape.starPoints.toFloat()) }
-    var ratio by remember(shape) { mutableFloatStateOf(shape.starInnerRadiusRatio) }
-
-    Column(modifier = Modifier.padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        val shapeType = shape.shapeType.uppercase()
-        if (shapeType == "POLYGON" || shapeType == "HEXAGON") {
-            MinimalSlider(
-                value = sides,
-                onValueChange = {
-                    sides = it
-                    onUpdateGeometry(it.toInt(), points.toInt(), ratio)
-                },
-                valueRange = 3f..16f,
-                label = "Polygon Sides",
-                valueFormatter = { "${it.toInt()}" }
-            )
-        }
-        if (shapeType == "STAR") {
-            MinimalSlider(
-                value = points,
-                onValueChange = {
-                    points = it
-                    onUpdateGeometry(sides.toInt(), it.toInt(), ratio)
-                },
-                valueRange = 3f..16f,
-                label = "Star Points",
-                valueFormatter = { "${it.toInt()}" }
-            )
-            MinimalSlider(
-                value = ratio,
-                onValueChange = {
-                    ratio = it
-                    onUpdateGeometry(sides.toInt(), points.toInt(), it)
-                },
-                valueRange = 0.1f..0.9f,
-                label = "Inner Radius Ratio",
-                valueFormatter = { "${(it * 100).toInt()}%" }
-            )
-        }
-    }
-}
-
-@Composable
-fun StrokeAdvancedPanel(
-    shape: TemplateElement.Shape,
-    editorState: MagicStoryEditorState,
-    onUpdateStrokeStyle: (String, String, String, Float) -> Unit,
-    onUpdateStrokeWidth: (Float) -> Unit,
-    onOpenColorPicker: () -> Unit,
-    onOpenEyedropper: () -> Unit
-) {
-    val currentStroke = editorState.getElementStroke(shape.id) ?: Pair(shape.borderColor ?: "#C91F2C", shape.borderWidth)
-    var style by remember(shape) { mutableStateOf(shape.strokeStyle) }
-    var cap by remember(shape) { mutableStateOf(shape.strokeCap) }
-    var join by remember(shape) { mutableStateOf(shape.strokeJoin) }
-    var opacity by remember(shape) { mutableFloatStateOf(shape.strokeOpacity) }
-
-    Column(modifier = Modifier.padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        MinimalSlider(
-            value = currentStroke.second,
-            onValueChange = { onUpdateStrokeWidth(it) },
-            valueRange = 0f..40f,
-            label = "Stroke Width",
-            valueFormatter = { "${it.toInt()} dp" }
-        )
-
-        Text("Stroke Pattern", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF202020))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("SOLID" to "Solid ━", "DASHED" to "Dashed ╍", "DOTTED" to "Dotted ┈").forEach { (k, l) ->
-                FilterChip(
-                    selected = style == k,
-                    onClick = {
-                        style = k
-                        onUpdateStrokeStyle(style, cap, join, opacity)
-                    },
-                    label = { Text(l, fontSize = 10.sp) },
-                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White)
-                )
-            }
-        }
-
-        Text("Line Cap", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF202020))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("BUTT" to "Butt", "ROUND" to "Round", "SQUARE" to "Square").forEach { (k, l) ->
-                FilterChip(
-                    selected = cap == k,
-                    onClick = {
-                        cap = k
-                        onUpdateStrokeStyle(style, cap, join, opacity)
-                    },
-                    label = { Text(l, fontSize = 10.sp) },
-                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White)
-                )
-            }
-        }
-
-        Text("Line Join", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF202020))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("MITER" to "Miter", "ROUND" to "Round", "BEVEL" to "Bevel").forEach { (k, l) ->
-                FilterChip(
-                    selected = join == k,
-                    onClick = {
-                        join = k
-                        onUpdateStrokeStyle(style, cap, join, opacity)
-                    },
-                    label = { Text(l, fontSize = 10.sp) },
-                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White)
-                )
-            }
-        }
-
-        MinimalSlider(
-            value = opacity,
-            onValueChange = {
-                opacity = it
-                onUpdateStrokeStyle(style, cap, join, opacity)
-            },
-            valueRange = 0f..1f,
-            label = "Stroke Opacity",
-            valueFormatter = { "${(it * 100).toInt()}%" }
-        )
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Button(
-                onClick = onOpenColorPicker,
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryRed),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Icon(imageVector = Icons.Outlined.Palette, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Pick Stroke Color", fontSize = 11.sp)
-            }
-            IconButton(onClick = onOpenEyedropper) {
-                Icon(imageVector = Icons.Outlined.Colorize, contentDescription = "Eyedropper", tint = PrimaryRed, modifier = Modifier.size(18.dp))
-            }
-        }
-    }
-}
-
-fun getElementLabel(element: TemplateElement?, elementId: String): String {
-    return when (element) {
-        is TemplateElement.Text -> "Text Element"
-        is TemplateElement.PhotoSlot -> "Photo Slot"
-        is TemplateElement.PhotoCard -> {
-            when (elementId) {
-                element.photoSlotId -> "Photo Slot"
-                element.captionId -> "Photo Caption"
-                else -> "Photo Card"
-            }
-        }
-        is TemplateElement.PillCta -> {
-            when (elementId) {
-                element.leftTextId -> "CTA Left Text"
-                element.buttonTextId -> "CTA Button Text"
-                else -> "Pill CTA"
-            }
-        }
-        is TemplateElement.Shape -> {
-            val name = element.shapeType.lowercase()
-                .split("_")
-                .joinToString(" ") { word -> word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } }
-            "$name Shape"
-        }
-        is TemplateElement.Background -> "Canvas Background"
-        null -> if (elementId == "bg") "Canvas Background" else "Element ($elementId)"
-    }
-}
-
-// DIALOGS
-
-@Composable
-fun TextEditDialog(
-    initialText: String,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var text by remember { mutableStateOf(initialText) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Edit Text Content", fontWeight = FontWeight.Bold, color = Color(0xFF202020)) },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                modifier = Modifier.fillMaxWidth(),
-                maxLines = 5,
-                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = PrimaryRed, cursorColor = PrimaryRed)
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(text) },
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryRed),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("Apply", fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel", color = Color(0xFF777777))
-            }
-        },
-        containerColor = Color.White,
-        shape = RoundedCornerShape(16.dp)
-    )
-}
-
-@Composable
-fun ShapeSelectionDialog(
-    onDismiss: () -> Unit,
-    onShapeSelected: (String) -> Unit
-) {
-    val shapes = listOf(
-        "RECTANGLE" to "⬛ Rectangle",
-        "ROUNDED_RECTANGLE" to "🔲 Rounded Rect",
-        "ELLIPSE" to "🔴 Circle / Ellipse",
-        "TRIANGLE" to "🔺 Triangle",
-        "DIAMOND" to "🔷 Diamond",
-        "PENTAGON" to "⬟ Pentagon",
-        "HEXAGON" to "⬢ Hexagon",
-        "OCTAGON" to "🛑 Octagon",
-        "STAR" to "⭐ Star",
-        "POLYGON" to "⬡ Custom Polygon"
-    )
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Insert Vector Shape", fontWeight = FontWeight.Bold, color = Color(0xFF202020)) },
-        text = {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.height(280.dp)
-            ) {
-                items(shapes) { (key, label) ->
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable { onShapeSelected(key) },
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFFF5F5F5),
-                        border = BorderStroke(1.dp, Color(0xFFE0E0E0))
-                    ) {
-                        Box(modifier = Modifier.padding(12.dp), contentAlignment = Alignment.Center) {
-                            Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF202020))
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel", color = Color(0xFF777777))
-            }
-        },
-        containerColor = Color.White,
-        shape = RoundedCornerShape(16.dp)
-    )
-}
-
-@Composable
-fun TransformPrecisionDialog(
-    selectedId: String,
-    editorState: MagicStoryEditorState,
-    viewModel: EditorViewModel,
-    onDismiss: () -> Unit
-) {
-    val selectedElem = editorState.template.elements.find { it.id == selectedId }
-    val curX = editorState.getElementX(selectedId, (selectedElem as? TemplateElement.Shape)?.x ?: 0.1f)
-    val curY = editorState.getElementY(selectedId, (selectedElem as? TemplateElement.Shape)?.y ?: 0.1f)
-    val curW = editorState.getElementW(selectedId, (selectedElem as? TemplateElement.Shape)?.width ?: 0.3f)
-    val curH = editorState.getElementH(selectedId, (selectedElem as? TemplateElement.Shape)?.height ?: 0.3f)
-    val curRot = editorState.getElementRotation(selectedId, (selectedElem as? TemplateElement.Shape)?.rotation ?: 0f)
-
-    var posX by remember { mutableFloatStateOf(curX) }
-    var posY by remember { mutableFloatStateOf(curY) }
-    var width by remember { mutableFloatStateOf(curW) }
-    var height by remember { mutableFloatStateOf(curH) }
-    var rot by remember { mutableFloatStateOf(curRot) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Transform & Precision Bounding Box", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF202020)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                MinimalSlider(value = posX, onValueChange = { posX = it; viewModel.updateElementPosition(selectedId, posX, posY) }, valueRange = 0f..1f, label = "Position X", valueFormatter = { "%.2f".format(it) })
-                MinimalSlider(value = posY, onValueChange = { posY = it; viewModel.updateElementPosition(selectedId, posX, posY) }, valueRange = 0f..1f, label = "Position Y", valueFormatter = { "%.2f".format(it) })
-                MinimalSlider(value = width, onValueChange = { width = it; viewModel.updateElementSize(selectedId, width, height) }, valueRange = 0.05f..1f, label = "Width", valueFormatter = { "%.2f".format(it) })
-                MinimalSlider(value = height, onValueChange = { height = it; viewModel.updateElementSize(selectedId, width, height) }, valueRange = 0.05f..1f, label = "Height", valueFormatter = { "%.2f".format(it) })
-                MinimalSlider(value = rot, onValueChange = { rot = it; viewModel.updateElementRotation(selectedId, rot) }, valueRange = 0f..360f, label = "Rotation Angle", valueFormatter = { "${it.toInt()}°" })
-            }
-        },
-        confirmButton = {
-            Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = PrimaryRed), shape = RoundedCornerShape(8.dp)) {
-                Text("Done", fontWeight = FontWeight.Bold)
-            }
-        },
-        containerColor = Color.White,
-        shape = RoundedCornerShape(16.dp)
-    )
-}
-
-@Composable
-fun LayersDrawer(
-    editorState: MagicStoryEditorState,
-    viewModel: EditorViewModel,
-    onDismiss: () -> Unit
-) {
-    val elements = editorState.template.elements.sortedByDescending { editorState.getElementZIndex(it.id, it.zIndex) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("PixelLab Layers Stack 🥞", fontWeight = FontWeight.Bold, color = Color(0xFF202020)) },
-        text = {
-            LazyColumn(
-                modifier = Modifier.height(300.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(elements) { elem ->
-                    val isSelected = editorState.selectedElementId == elem.id
-                    val isLocked = editorState.isElementLocked(elem.id)
-                    val isHidden = editorState.isElementHidden(elem.id)
-                    val label = getElementLabel(elem, elem.id)
-
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable { viewModel.selectElement(elem.id) },
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (isSelected) PrimaryRed.copy(alpha = 0.12f) else Color(0xFFF9F9F9),
-                        border = BorderStroke(1.dp, if (isSelected) PrimaryRed else Color(0xFFE5E5E5))
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                Icon(imageVector = Icons.Outlined.DragHandle, contentDescription = null, tint = Color(0xFF999999), modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF202020), maxLines = 1)
-                            }
-
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(onClick = { viewModel.toggleElementLock(elem.id) }, modifier = Modifier.size(28.dp)) {
-                                    Icon(imageVector = if (isLocked) Icons.Outlined.Lock else Icons.Outlined.LockOpen, contentDescription = "Lock", tint = if (isLocked) PrimaryRed else Color(0xFF777777), modifier = Modifier.size(18.dp))
-                                }
-                                IconButton(onClick = { viewModel.toggleElementHide(elem.id) }, modifier = Modifier.size(28.dp)) {
-                                    Icon(imageVector = if (isHidden) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, contentDescription = "Visibility", tint = if (isHidden) Color(0xFFBBBBBB) else Color(0xFF777777), modifier = Modifier.size(18.dp))
-                                }
-                                IconButton(onClick = { viewModel.moveElementZOrder(elem.id, ZOrderAction.MOVE_UP) }, modifier = Modifier.size(28.dp)) {
-                                    Icon(imageVector = Icons.Outlined.ArrowUpward, contentDescription = "Move Up", tint = Color(0xFF333333), modifier = Modifier.size(18.dp))
-                                }
-                                IconButton(onClick = { viewModel.moveElementZOrder(elem.id, ZOrderAction.MOVE_DOWN) }, modifier = Modifier.size(28.dp)) {
-                                    Icon(imageVector = Icons.Outlined.ArrowDownward, contentDescription = "Move Down", tint = Color(0xFF333333), modifier = Modifier.size(18.dp))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = PrimaryRed), shape = RoundedCornerShape(8.dp)) {
-                Text("Close", fontWeight = FontWeight.Bold)
-            }
-        },
-        containerColor = Color.White,
-        shape = RoundedCornerShape(16.dp)
-    )
-}
-
-@Composable
-fun ExportOptionsDialog(
-    editorState: MagicStoryEditorState,
-    viewModel: EditorViewModel,
-    onDismiss: () -> Unit,
-    onExportConfirmed: () -> Unit
-) {
-    var format by remember { mutableStateOf(editorState.exportFormat) }
-    var scale by remember { mutableStateOf(editorState.exportScale) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Export High-Res Image 💾", fontWeight = FontWeight.Bold, color = Color(0xFF202020)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Export Format", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF202020))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ExportFormat.entries.forEach { fmt ->
-                        FilterChip(
-                            selected = format == fmt,
-                            onClick = {
-                                format = fmt
-                                viewModel.setExportFormat(fmt)
-                            },
-                            label = { Text(fmt.name) },
-                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White)
-                        )
-                    }
-                }
-
-                Text("Resolution Scaling Multiplier", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF202020))
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    ExportScale.entries.forEach { sc ->
-                        FilterChip(
-                            selected = scale == sc,
-                            onClick = {
-                                scale = sc
-                                viewModel.setExportScale(sc)
-                            },
-                            label = { Text(sc.label) },
-                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(onClick = onExportConfirmed, colors = ButtonDefaults.buttonColors(containerColor = PrimaryRed), shape = RoundedCornerShape(8.dp)) {
-                Text("Export High-Res", fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel", color = Color(0xFF777777))
-            }
-        },
-        containerColor = Color.White,
-        shape = RoundedCornerShape(16.dp)
-    )
-}
-
-@Composable
-fun AdvancedColorPickerDialog(
-    initialColorHex: String,
-    onColorSelected: (String) -> Unit,
-    onDismiss: () -> Unit,
-    onOpenEyedropper: () -> Unit
-) {
-    var hexInput by remember { mutableStateOf(initialColorHex) }
-    val presetColors = listOf("#C91F2C", "#A91521", "#E53945", "#000000", "#FFFFFF", "#1E3A8A", "#065F46", "#D97706", "#8235DC", "#3657FF", "#FF0055", "#00D2FF")
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Color Palette & Hex Selector 🎨", fontWeight = FontWeight.Bold, color = Color(0xFF202020)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = hexInput,
-                    onValueChange = { hexInput = it },
-                    label = { Text("Hex Color Code (#RRGGBB)") },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = PrimaryRed, cursorColor = PrimaryRed),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Text("Quick Palette Swatches", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF202020))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    presetColors.forEach { colorHex ->
-                        Surface(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .clickable { hexInput = colorHex },
-                            shape = CircleShape,
-                            color = try { Color(android.graphics.Color.parseColor(colorHex)) } catch (_: Exception) { Color.Black },
-                            border = BorderStroke(1.5.dp, Color(0xFFD0D0D0))
-                        ) {}
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onColorSelected(hexInput) },
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryRed),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("Select Color", fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel", color = Color(0xFF777777))
-            }
-        },
-        containerColor = Color.White,
-        shape = RoundedCornerShape(16.dp)
-    )
-}
-
-@Composable
-fun CustomGradientPickerDialog(
-    initialGradient: GradientConfig?,
-    onGradientSelected: (GradientConfig) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var c1 by remember { mutableStateOf(initialGradient?.colors?.getOrNull(0) ?: "#C91F2C") }
-    var c2 by remember { mutableStateOf(initialGradient?.colors?.getOrNull(1) ?: "#000000") }
-    var angle by remember { mutableFloatStateOf(initialGradient?.angle ?: 45f) }
-    var type by remember { mutableStateOf(initialGradient?.type ?: "LINEAR") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Custom Gradient Builder 🌈", fontWeight = FontWeight.Bold, color = Color(0xFF202020)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = type == "LINEAR", onClick = { type = "LINEAR" }, label = { Text("Linear") }, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White))
-                    FilterChip(selected = type == "RADIAL", onClick = { type = "RADIAL" }, label = { Text("Radial") }, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White))
-                }
-
-                OutlinedTextField(value = c1, onValueChange = { c1 = it }, label = { Text("Start Color Hex") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = c2, onValueChange = { c2 = it }, label = { Text("End Color Hex") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                MinimalSlider(value = angle, onValueChange = { angle = it }, valueRange = 0f..360f, label = "Direction Angle", valueFormatter = { "${it.toInt()}°" })
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onGradientSelected(GradientConfig(colors = listOf(c1, c2), angle = angle, type = type)) },
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryRed),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("Apply Gradient", fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel", color = Color(0xFF777777))
-            }
-        },
-        containerColor = Color.White,
-        shape = RoundedCornerShape(16.dp)
-    )
-}
-
-@Composable
-fun BoxScope.BottomPanelOverlay(
-    visible: Boolean,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit
-) {
-    AnimatedVisibility(
-        visible = visible,
-        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-        modifier = modifier
-    ) {
-        content()
-    }
-}

@@ -413,10 +413,10 @@ private fun checkElementHandleHit(
 
     // Only test corner/side resize handles & rotation stem if element is ALREADY selected
     if (isSelected) {
-        val hitRadius = 24f * scaleFactor
+        val hitRadius = 30f * scaleFactor
 
-        val stemTopY = -h2 - 20f * scaleFactor
-        if (distSq(lx, ly, 0f, stemTopY) <= (hitRadius * 1.5f) * (hitRadius * 1.5f)) {
+        val stemTopY = -h2 - 30f * scaleFactor
+        if (distSq(lx, ly, 0f, stemTopY) <= (hitRadius * 2f) * (hitRadius * 2f)) {
             return TouchHandle.ROTATION
         }
 
