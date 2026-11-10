@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
@@ -65,6 +66,8 @@ fun TemplateCanvasPreview(
     editorState: MagicStoryEditorState,
     modifier: Modifier = Modifier,
     isInteractive: Boolean = false,
+    zoomScale: Float = 1.0f,
+    panOffset: Offset = Offset.Zero,
     onElementSelect: (String?) -> Unit = {},
     onElementDrag: (String, Float, Float) -> Unit = { _, _, _ -> },
     onElementResize: (String, Float, Float) -> Unit = { _, _, _ -> },
@@ -95,19 +98,21 @@ fun TemplateCanvasPreview(
 
     val interactiveModifier = if (isInteractive) {
         Modifier
-            .pointerInput(Unit) {
+            .pointerInput(zoomScale, panOffset) {
                 detectTapGestures { offset ->
                     val canvasW = size.width.toFloat()
                     val canvasH = size.height.toFloat()
                     if (canvasW > 0 && canvasH > 0) {
-                        val normX = offset.x / canvasW
-                        val normY = offset.y / canvasH
+                        val localX = if (zoomScale != 1.0f) (offset.x - panOffset.x) / zoomScale else offset.x
+                        val localY = if (zoomScale != 1.0f) (offset.y - panOffset.y) / zoomScale else offset.y
+                        val normX = localX / canvasW
+                        val normY = localY / canvasH
                         val (hitId, _) = findHitElementAndHandle(currentManifest, currentState, normX, normY, canvasW, canvasH)
                         currentOnSelect(hitId)
                     }
                 }
             }
-            .pointerInput(Unit) {
+            .pointerInput(zoomScale, panOffset) {
                 awaitPointerEventScope {
                     while (true) {
                         val down = awaitFirstDown(requireUnconsumed = false)
@@ -116,8 +121,11 @@ fun TemplateCanvasPreview(
 
                         if (canvasW <= 0 || canvasH <= 0) continue
 
-                        val startNormX = down.position.x / canvasW
-                        val startNormY = down.position.y / canvasH
+                        val localDownX = if (zoomScale != 1.0f) (down.position.x - panOffset.x) / zoomScale else down.position.x
+                        val localDownY = if (zoomScale != 1.0f) (down.position.y - panOffset.y) / zoomScale else down.position.y
+
+                        val startNormX = localDownX / canvasW
+                        val startNormY = localDownY / canvasH
 
                         val (targetId, handle) = findHitElementAndHandle(currentManifest, currentState, startNormX, startNormY, canvasW, canvasH)
 
@@ -142,8 +150,8 @@ fun TemplateCanvasPreview(
                         val initialElemW = getElementW(currentManifest, currentState, targetId)
                         val initialElemH = getElementH(currentManifest, currentState, targetId)
 
-                        var lastTouchPx = down.position.x
-                        var lastTouchPy = down.position.y
+                        var lastTouchPx = localDownX
+                        var lastTouchPy = localDownY
 
                         var currentX = initialElemX
                         var currentY = initialElemY
@@ -160,8 +168,8 @@ fun TemplateCanvasPreview(
                                 break
                             }
 
-                            val touchPx = change.position.x
-                            val touchPy = change.position.y
+                            val touchPx = if (zoomScale != 1.0f) (change.position.x - panOffset.x) / zoomScale else change.position.x
+                            val touchPy = if (zoomScale != 1.0f) (change.position.y - panOffset.y) / zoomScale else change.position.y
 
                             val dxPx = touchPx - lastTouchPx
                             val dyPx = touchPy - lastTouchPy

@@ -1,9 +1,15 @@
 package com.mahiuddin.magicstory.ui.editor
 
 import android.content.Context
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateOffsetAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,18 +22,28 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Colorize
 import androidx.compose.material.icons.outlined.TouchApp
+import androidx.compose.material.icons.outlined.ZoomIn
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -36,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import com.mahiuddin.magicstory.domain.model.MagicStoryEditorState
 import com.mahiuddin.magicstory.template.renderer.TemplateRenderer
 import com.mahiuddin.magicstory.ui.components.TemplateCanvasPreview
+import kotlin.math.abs
 
 @Composable
 fun EditorCanvasManager(
@@ -46,15 +63,46 @@ fun EditorCanvasManager(
     onClearSubTool: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // FIXED WORKSPACE CONTAINER
+    var zoomScale by remember { mutableFloatStateOf(1.0f) }
+    var panOffset by remember { mutableStateOf(Offset.Zero) }
+
+    val animatedZoomScale by animateFloatAsState(
+        targetValue = zoomScale,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "zoomScale"
+    )
+    val animatedPanOffset by animateOffsetAsState(
+        targetValue = panOffset,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "panOffset"
+    )
+
+    // FIXED WORKSPACE CONTAINER WITH 2-FINGER PINCH ZOOM & PAN
     Box(
         modifier = modifier
+            .pointerInput(Unit) {
+                detectTransformGestures { _, pan, zoom, _ ->
+                    val newZoom = (zoomScale * zoom).coerceIn(0.5f, 5.0f)
+                    val scaleChange = newZoom / zoomScale
+                    zoomScale = newZoom
+                    panOffset = Offset(
+                        x = (panOffset.x + pan.x) * scaleChange,
+                        y = (panOffset.y + pan.y) * scaleChange
+                    )
+                }
+            }
     ) {
-        // STABLE CANVAS VIEWPORT (Fixed dimensions independent from bottom panel overlay)
+        // STABLE CANVAS VIEWPORT WITH ZOOM & PAN GRAPHICS LAYER
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 80.dp),
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 80.dp)
+                .graphicsLayer {
+                    scaleX = animatedZoomScale
+                    scaleY = animatedZoomScale
+                    translationX = animatedPanOffset.x
+                    translationY = animatedPanOffset.y
+                },
             contentAlignment = Alignment.Center
         ) {
             TemplateCanvasPreview(
@@ -62,6 +110,8 @@ fun EditorCanvasManager(
                 editorState = state,
                 modifier = Modifier.fillMaxSize(),
                 isInteractive = !state.isEyedropperActive,
+                zoomScale = animatedZoomScale,
+                panOffset = animatedPanOffset,
                 onElementSelect = { id ->
                     viewModel.selectElement(id)
                     onClearSubTool()
@@ -128,48 +178,56 @@ fun EditorCanvasManager(
                     }
                 }
             }
+        }
 
-            // Contextual Canvas Top Hint
-            Box(
+
+
+        // Floating Reset Zoom Badge (appears when zoomed or panned)
+        if (abs(zoomScale - 1.0f) > 0.05f || panOffset != Offset.Zero) {
+            Surface(
+                onClick = {
+                    zoomScale = 1.0f
+                    panOffset = Offset.Zero
+                },
+                shape = CircleShape,
+                color = Color(0xFF202020).copy(alpha = 0.85f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.4f)),
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .clip(CircleShape)
-                    .background(Color(0xFF202020).copy(alpha = 0.75f))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .align(Alignment.TopEnd)
+                    .padding(top = 12.dp, end = 16.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Icon(
-                        imageVector = if (state.isEyedropperActive) Icons.Outlined.Colorize else Icons.Outlined.TouchApp,
-                        contentDescription = null,
+                        imageVector = Icons.Outlined.ZoomIn,
+                        contentDescription = "Reset Zoom",
                         tint = Color.White,
                         modifier = Modifier.size(14.dp)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = when {
-                            state.isEyedropperActive -> "Touch anywhere on canvas to pick a color"
-                            state.selectedElementId != null -> "Drag to move | Corners to resize | Top stem to rotate"
-                            else -> "Tap any element or background to select & edit"
-                        },
+                        text = "${(zoomScale * 100).toInt()}% ↺",
                         color = Color.White,
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
+        }
 
-            if (state.isExporting) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.5f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(color = Color.White)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text("Exporting High-Res Image...", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
+        if (state.isExporting) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = Color.White)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Exporting High-Res Image...", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
         }

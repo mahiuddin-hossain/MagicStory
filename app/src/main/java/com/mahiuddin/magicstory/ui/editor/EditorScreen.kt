@@ -169,7 +169,7 @@ fun EditorScreen(
         viewModel.loadTemplate(templateId)
     }
 
-    var showShapeLibraryDialog by remember { mutableStateOf(false) }
+    var showShapeMenu by remember { mutableStateOf(false) }
     var showTransformPrecisionDialog by remember { mutableStateOf(false) }
     var showLayersDrawer by remember { mutableStateOf(false) }
     var showExportOptionsDialog by remember { mutableStateOf(false) }
@@ -217,12 +217,7 @@ fun EditorScreen(
         topBar = {
             EditorTopAppBar(
                 title = state.template.title,
-                canUndo = state.canUndo,
-                canRedo = state.canRedo,
                 onBackPress = onBackPress,
-                onUndo = { viewModel.undo() },
-                onRedo = { viewModel.redo() },
-                onSetExportResolution = { viewModel.setExportResolution(it) },
                 onOpenExportDialog = { showExportOptionsDialog = true }
             )
         }
@@ -237,7 +232,13 @@ fun EditorScreen(
                 EditorSecondaryQuickToolbar(
                     canUndo = state.canUndo,
                     canRedo = state.canRedo,
-                    onOpenShapeLibrary = { showShapeLibraryDialog = true },
+                    showShapeMenu = showShapeMenu,
+                    onOpenShapeLibrary = { showShapeMenu = true },
+                    onDismissShapeMenu = { showShapeMenu = false },
+                    onShapeSelected = { shapeKey ->
+                        viewModel.addShapeElement(shapeKey)
+                        showShapeMenu = false
+                    },
                     onInsertImage = { insertImageLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                     onSetExportResolution = { viewModel.setExportResolution(it) },
                     onOpenLayersDrawer = { showLayersDrawer = true },
@@ -330,34 +331,7 @@ fun EditorScreen(
                             }
                         }
 
-                        // Contextual Canvas Top Hint
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .clip(CircleShape)
-                                .background(Color(0xFF202020).copy(alpha = 0.75f))
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = if (state.isEyedropperActive) Icons.Outlined.Colorize else Icons.Outlined.TouchApp,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = when {
-                                        state.isEyedropperActive -> "Touch anywhere on canvas to pick a color"
-                                        state.selectedElementId != null -> "Drag to move | Corners to resize | Top stem to rotate"
-                                        else -> "Tap any element or background to select & edit"
-                                    },
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
+
 
                         if (state.isExporting) {
                             Box(
@@ -658,15 +632,7 @@ fun EditorScreen(
         )
     }
 
-    // 2. Vector Shape Library Selection Dialog
-    EditorVectorShapeManager(
-        showDialog = showShapeLibraryDialog,
-        onDismiss = { showShapeLibraryDialog = false },
-        onShapeSelected = { shapeKey ->
-            viewModel.addShapeElement(shapeKey)
-            showShapeLibraryDialog = false
-        }
-    )
+
 
     // 3. Illustrator-Style Transform Precision Dialog
     if (showTransformPrecisionDialog && state.selectedElementId != null) {

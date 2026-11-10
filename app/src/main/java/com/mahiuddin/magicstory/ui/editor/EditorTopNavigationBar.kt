@@ -20,7 +20,7 @@ import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.outlined.AddPhotoAlternate
 import androidx.compose.material.icons.outlined.AspectRatio
 import androidx.compose.material.icons.outlined.Category
-import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -50,16 +50,9 @@ import com.mahiuddin.magicstory.ui.theme.PrimaryRed
 @Composable
 fun EditorTopAppBar(
     title: String,
-    canUndo: Boolean,
-    canRedo: Boolean,
     onBackPress: () -> Unit,
-    onUndo: () -> Unit,
-    onRedo: () -> Unit,
-    onSetExportResolution: (ExportResolution) -> Unit,
     onOpenExportDialog: () -> Unit
 ) {
-    var showAspectMenu by remember { mutableStateOf(false) }
-
     TopAppBar(
         title = {
             Text(
@@ -82,79 +75,14 @@ fun EditorTopAppBar(
             }
         },
         actions = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                // Canvas Aspect Ratio Selector
-                Box {
-                    IconButton(onClick = { showAspectMenu = true }) {
-                        Icon(
-                            imageVector = Icons.Outlined.AspectRatio,
-                            contentDescription = "Canvas Size",
-                            tint = Color(0xFF333333),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = showAspectMenu,
-                        onDismissRequest = { showAspectMenu = false },
-                        modifier = Modifier.background(Color.White)
-                    ) {
-                        ExportResolution.entries.forEach { res ->
-                            DropdownMenuItem(
-                                text = {
-                                    Column {
-                                        Text(text = res.label, fontWeight = FontWeight.Bold, color = Color(0xFF202020))
-                                        Text(text = "${res.width}x${res.height} px", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF777777))
-                                    }
-                                },
-                                onClick = {
-                                    onSetExportResolution(res)
-                                    showAspectMenu = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                // Undo
-                IconButton(onClick = onUndo, enabled = canUndo) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.Undo,
-                        contentDescription = "Undo",
-                        tint = if (canUndo) Color(0xFF333333) else Color(0xFFBDBDBD),
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                // Redo
-                IconButton(onClick = onRedo, enabled = canRedo) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.Redo,
-                        contentDescription = "Redo",
-                        tint = if (canRedo) Color(0xFF333333) else Color(0xFFBDBDBD),
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .padding(horizontal = 4.dp)
-                        .width(1.dp)
-                        .height(18.dp)
-                        .background(Color(0xFFE0E0E0))
+            // Export / Save
+            IconButton(onClick = onOpenExportDialog) {
+                Icon(
+                    imageVector = Icons.Outlined.Save,
+                    contentDescription = "Save Image",
+                    tint = PrimaryRed,
+                    modifier = Modifier.size(20.dp)
                 )
-
-                // Export
-                IconButton(onClick = onOpenExportDialog) {
-                    Icon(
-                        imageVector = Icons.Outlined.Download,
-                        contentDescription = "Export Image",
-                        tint = PrimaryRed,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
@@ -165,7 +93,10 @@ fun EditorTopAppBar(
 fun EditorSecondaryQuickToolbar(
     canUndo: Boolean,
     canRedo: Boolean,
+    showShapeMenu: Boolean,
     onOpenShapeLibrary: () -> Unit,
+    onDismissShapeMenu: () -> Unit,
+    onShapeSelected: (String) -> Unit,
     onInsertImage: () -> Unit,
     onSetExportResolution: (ExportResolution) -> Unit,
     onOpenLayersDrawer: () -> Unit,
@@ -187,13 +118,20 @@ fun EditorSecondaryQuickToolbar(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 1. Insert Vector Shape Library Button
-            IconButton(onClick = onOpenShapeLibrary) {
-                Icon(
-                    imageVector = Icons.Outlined.Category,
-                    contentDescription = "Insert Shape",
-                    tint = Color(0xFF202020),
-                    modifier = Modifier.size(20.dp)
+            // 1. Insert Vector Shape Library Button with Popup Dropdown
+            Box {
+                IconButton(onClick = onOpenShapeLibrary) {
+                    Icon(
+                        imageVector = Icons.Outlined.Category,
+                        contentDescription = "Insert Shape",
+                        tint = Color(0xFF202020),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                EditorVectorShapeManager(
+                    expanded = showShapeMenu,
+                    onDismiss = onDismissShapeMenu,
+                    onShapeSelected = onShapeSelected
                 )
             }
 
