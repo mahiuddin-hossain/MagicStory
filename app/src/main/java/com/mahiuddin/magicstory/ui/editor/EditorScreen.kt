@@ -51,6 +51,7 @@ import androidx.compose.material.icons.outlined.AspectRatio
 import androidx.compose.material.icons.outlined.BorderColor
 import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Crop
 import androidx.compose.material.icons.outlined.Colorize
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
@@ -181,6 +182,8 @@ fun EditorScreen(
 
     var activeSubTool by remember { mutableStateOf(ActiveSubTool.NONE) }
     var textEditDialogVisible by remember { mutableStateOf(false) }
+    var pendingCropImageUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingCropSlotPhotoUri by remember { mutableStateOf<Uri?>(null) }
 
     val state = editorState
 
@@ -197,9 +200,7 @@ fun EditorScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         uri?.let {
-            targetPhotoSlotId?.let { slotId ->
-                viewModel.updatePhoto(slotId, it)
-            }
+            pendingCropSlotPhotoUri = it
         }
     }
 
@@ -207,7 +208,7 @@ fun EditorScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         uri?.let {
-            viewModel.addImageElement(it)
+            pendingCropImageUri = it
         }
     }
 
@@ -423,7 +424,7 @@ fun EditorScreen(
                                             )
                                         }
 
-                                        // Replace Photo (if Photo Slot / Card)
+                                        // Replace Photo & Re-Crop Photo (if Photo Slot / Card)
                                         if (selectedElem is TemplateElement.PhotoSlot || (selectedElem is TemplateElement.PhotoCard && selectedId == selectedElem.photoSlotId)) {
                                             EditorActionIconBtn(
                                                 selected = false,
@@ -433,6 +434,18 @@ fun EditorScreen(
                                                 },
                                                 icon = Icons.Outlined.Image,
                                                 contentDescription = "Replace Photo"
+                                            )
+                                            EditorActionIconBtn(
+                                                selected = false,
+                                                onClick = {
+                                                    val currentPhotoUriStr = state.getPhotoUri(selectedId, (selectedElem as? TemplateElement.PhotoSlot)?.defaultAsset)
+                                                    if (!currentPhotoUriStr.isNullOrBlank()) {
+                                                        targetPhotoSlotId = selectedId
+                                                        pendingCropImageUri = Uri.parse(currentPhotoUriStr)
+                                                    }
+                                                },
+                                                icon = Icons.Outlined.Crop,
+                                                contentDescription = "Crop Photo"
                                             )
                                         }
 
@@ -645,13 +658,12 @@ fun EditorScreen(
     }
 
     // 4. PixelLab-Style Layer Stack Drawer
-    if (showLayersDrawer) {
-        EditorLayersPanel(
-            editorState = state,
-            viewModel = viewModel,
-            onDismiss = { showLayersDrawer = false }
-        )
-    }
+    EditorLayersPanel(
+        visible = showLayersDrawer,
+        editorState = state,
+        viewModel = viewModel,
+        onDismiss = { showLayersDrawer = false }
+    )
 
     // 5. High-Res Image Export Dialog
     if (showExportOptionsDialog) {
@@ -721,6 +733,35 @@ fun EditorScreen(
         ExportSuccessDialog(
             imageUriString = uriStr,
             onDismiss = { viewModel.clearExportResult() }
+        )
+    }
+
+    // 9. Pre-Insert Image Crop & Edit Dialog (PixelLab Style)
+    pendingCropImageUri?.let { uri ->
+        EditorImageCropDialog(
+            imageUri = uri,
+            onConfirm = { croppedUri ->
+                viewModel.addImageElement(context, croppedUri)
+                pendingCropImageUri = null
+            },
+            onDismiss = { pendingCropImageUri = null }
+        )
+    }
+
+    pendingCropSlotPhotoUri?.let { uri ->
+        EditorImageCropDialog(
+            imageUri = uri,
+            onConfirm = { croppedUri ->
+                targetPhotoSlotId?.let { slotId ->
+                    viewModel.updatePhoto(context, slotId, croppedUri)
+                }
+                pendingCropSlotPhotoUri = null
+                targetPhotoSlotId = null
+            },
+            onDismiss = {
+                pendingCropSlotPhotoUri = null
+                targetPhotoSlotId = null
+            }
         )
     }
 }

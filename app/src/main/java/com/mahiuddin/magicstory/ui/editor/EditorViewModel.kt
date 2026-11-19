@@ -1,6 +1,7 @@
 package com.mahiuddin.magicstory.ui.editor
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -670,7 +671,7 @@ class EditorViewModel(
         )
     }
 
-    fun addImageElement(uri: Uri) {
+    fun addImageElement(context: Context, uri: Uri) {
         val currentState = _state.value ?: return
         val currentElements = currentState.template.elements
 
@@ -678,10 +679,25 @@ class EditorViewModel(
         val timestamp = System.currentTimeMillis() % 100000
         val newId = "inserted_photo_$timestamp"
 
-        val initX = 0.25f
-        val initY = 0.28f
-        val initW = 0.5f
-        val initH = 0.35f
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        try {
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                BitmapFactory.decodeStream(stream, null, options)
+            }
+        } catch (_: Exception) {}
+
+        val imgW = if (options.outWidth > 0) options.outWidth.toFloat() else 1000f
+        val imgH = if (options.outHeight > 0) options.outHeight.toFloat() else 1000f
+        val imgRatio = imgW / imgH
+
+        val refW = currentState.template.referenceWidth.toFloat()
+        val refH = currentState.template.referenceHeight.toFloat()
+        val canvasRatio = if (refH > 0f) refW / refH else 1.0f
+
+        val initW = 0.45f
+        val initH = ((initW * canvasRatio) / imgRatio).coerceIn(0.1f, 0.85f)
+        val initX = (1f - initW) / 2f
+        val initY = (1f - initH) / 2f
 
         val newPhotoSlot = TemplateElement.PhotoSlot(
             id = newId,
@@ -694,7 +710,7 @@ class EditorViewModel(
             height = initH,
             rotation = 0f,
             defaultAsset = uri.toString(),
-            cornerRadius = 12f,
+            cornerRadius = 0f,
             fitMode = "COVER",
             label = "Inserted Image"
         )
@@ -1116,10 +1132,29 @@ class EditorViewModel(
         )
     }
 
-    fun updatePhoto(slotId: String, uri: Uri) {
+    fun updatePhoto(context: Context, slotId: String, uri: Uri) {
         val currentState = _state.value ?: return
         val newPhotos = currentState.photoUris.toMutableMap().apply {
             put(slotId, uri.toString())
+        }
+
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        try {
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                BitmapFactory.decodeStream(stream, null, options)
+            }
+        } catch (_: Exception) {}
+
+        val newSizes = currentState.elementSizes.toMutableMap()
+        if (options.outWidth > 0 && options.outHeight > 0) {
+            val imgRatio = options.outWidth.toFloat() / options.outHeight.toFloat()
+            val refW = currentState.template.referenceWidth.toFloat()
+            val refH = currentState.template.referenceHeight.toFloat()
+            val canvasRatio = if (refH > 0f) refW / refH else 1.0f
+
+            val currentW = currentState.getElementW(slotId, 0.45f)
+            val newH = ((currentW * canvasRatio) / imgRatio).coerceIn(0.08f, 0.9f)
+            newSizes[slotId] = Pair(currentW, newH)
         }
 
         pushState(

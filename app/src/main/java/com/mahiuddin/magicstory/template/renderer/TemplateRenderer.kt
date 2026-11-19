@@ -592,7 +592,9 @@ object TemplateRenderer {
         }
 
         drawOuterGlow(canvas, destRect, effect, scaleFactor, cornerRadius)
-        drawDarkGradientPlaceholder(canvas, destRect, cornerRadius)
+        if (photoUri.isNullOrBlank()) {
+            drawDarkGradientPlaceholder(canvas, destRect, cornerRadius)
+        }
         BitmapUtils.drawCoverBitmap(canvas, bitmap, destRect, cornerRadius)
 
         drawCustomStroke(canvas, destRect, slot.id, editorState, scaleFactor, cornerRadius)
