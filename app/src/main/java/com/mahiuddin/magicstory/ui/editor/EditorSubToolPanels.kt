@@ -42,6 +42,7 @@ import com.mahiuddin.magicstory.domain.model.MagicStoryEditorState
 import com.mahiuddin.magicstory.domain.model.TemplateElement
 import com.mahiuddin.magicstory.ui.components.MinimalSlider
 import com.mahiuddin.magicstory.ui.theme.PrimaryRed
+import kotlin.math.abs
 
 @Composable
 fun EditorSubToolContainer(
@@ -569,39 +570,112 @@ fun EditorSubToolContainer(
             }
         }
         ActiveSubTool.TEXT_BG -> {
-            val bgColors = listOf("#C91F2C", "#A91521", "#211D1E", "#000000", "#FFF7F7", "#D9E0D8", "#EAEAEA")
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Surface(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .clickable { viewModel.updateTextBgColor(selectedId, null) },
-                    shape = CircleShape,
-                    color = Color.White,
-                    border = BorderStroke(1.dp, Color(0xFFE0E0E0))
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(imageVector = Icons.Outlined.Close, contentDescription = "Clear", tint = Color(0xFF777777), modifier = Modifier.size(18.dp))
-                    }
-                }
+            val currentBgHex = state.getTextBgColor(selectedId) ?: "#C91F2C"
+            val currentBgRadius = state.getTextBgCornerRadius(selectedId, 10f)
+            val currentBgOpacity = state.getTextBgOpacity(selectedId, 1.0f)
 
-                bgColors.forEach { colorHex ->
+            Column(modifier = Modifier.padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Row 1: Eyedropper, Universal Color Picker, Clear, Swatches
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Eyedropper Button
                     Surface(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .clickable { viewModel.updateTextBgColor(selectedId, colorHex) },
+                            .clickable { onOpenEyedropper("TEXT_BG") },
                         shape = CircleShape,
-                        color = try { Color(android.graphics.Color.parseColor(colorHex)) } catch (_: Exception) { Color.Black },
-                        border = BorderStroke(1.5.dp, Color(0xFFEAEAEA))
-                    ) {}
+                        color = Color.White,
+                        border = BorderStroke(1.dp, Color(0xFFE0E0E0))
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(imageVector = Icons.Outlined.Colorize, contentDescription = "Eyedropper", tint = PrimaryRed, modifier = Modifier.size(18.dp))
+                        }
+                    }
+
+                    // Universal Color Picker Button
+                    Surface(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .clickable { onOpenColorPicker(selectedId, currentBgHex, "TEXT_BG") },
+                        shape = CircleShape,
+                        color = Color.White,
+                        border = BorderStroke(1.dp, Color(0xFFE0E0E0))
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(imageVector = Icons.Outlined.Palette, contentDescription = "Color Picker", tint = Color(0xFF333333), modifier = Modifier.size(18.dp))
+                        }
+                    }
+
+                    // Clear Text Background Button
+                    Surface(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .clickable { viewModel.updateTextBgColor(selectedId, null) },
+                        shape = CircleShape,
+                        color = Color.White,
+                        border = BorderStroke(1.dp, Color(0xFFE0E0E0))
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(imageVector = Icons.Outlined.Close, contentDescription = "Clear Highlight", tint = Color(0xFF777777), modifier = Modifier.size(18.dp))
+                        }
+                    }
+
+                    // Color Swatches
+                    state.savedSwatches.forEach { colorHex ->
+                        Surface(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .clickable { viewModel.updateTextBgColor(selectedId, colorHex) },
+                            shape = CircleShape,
+                            color = try { Color(android.graphics.Color.parseColor(colorHex)) } catch (_: Exception) { Color.Black },
+                            border = BorderStroke(1.5.dp, Color(0xFFEAEAEA))
+                        ) {}
+                    }
                 }
+
+                // Row 2: Corner Radius Slider & Presets
+                MinimalSlider(
+                    value = currentBgRadius,
+                    onValueChange = { viewModel.updateTextBgCornerRadius(selectedId, it) },
+                    valueRange = 0f..50f,
+                    label = "Corners",
+                    valueFormatter = { "${it.toInt()} dp" }
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    listOf("Rectangle (0)" to 0f, "Rounded (8)" to 8f, "Pill Shape (20)" to 20f).forEach { (label, rad) ->
+                        FilterChip(
+                            selected = abs(currentBgRadius - rad) < 0.5f,
+                            onClick = { viewModel.updateTextBgCornerRadius(selectedId, rad) },
+                            label = { Text(label, fontSize = 10.sp) },
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryRed, selectedLabelColor = Color.White)
+                        )
+                    }
+                }
+
+                // Row 3: Text Background Opacity Slider
+                MinimalSlider(
+                    value = currentBgOpacity,
+                    onValueChange = { viewModel.updateTextBgOpacity(selectedId, it) },
+                    valueRange = 0f..1f,
+                    label = "Opacity",
+                    valueFormatter = { "${(it * 100).toInt()}%" }
+                )
             }
         }
         ActiveSubTool.BG_TEXTURE -> {

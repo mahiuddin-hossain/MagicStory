@@ -512,7 +512,7 @@ fun EditorScreen(
                                             )
                                         }
 
-                                        // Common Controls: Opacity, Effects, Rotate, Flip, Transform Precision
+                                        // Common Controls: Opacity & Effects
                                         if (selectedElem !is TemplateElement.Background) {
                                             EditorActionIconBtn(
                                                 selected = activeSubTool == ActiveSubTool.OPACITY,
@@ -525,30 +525,6 @@ fun EditorScreen(
                                                 onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.EFFECTS) ActiveSubTool.NONE else ActiveSubTool.EFFECTS },
                                                 icon = Icons.Outlined.Tune,
                                                 contentDescription = "Effects"
-                                            )
-                                            EditorActionIconBtn(
-                                                selected = activeSubTool == ActiveSubTool.ROTATE,
-                                                onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.ROTATE) ActiveSubTool.NONE else ActiveSubTool.ROTATE },
-                                                icon = Icons.AutoMirrored.Outlined.RotateRight,
-                                                contentDescription = "Rotate"
-                                            )
-                                            EditorActionIconBtn(
-                                                selected = state.getFlipX(selectedId),
-                                                onClick = { viewModel.toggleElementFlipX(selectedId) },
-                                                icon = Icons.Outlined.SwapHoriz,
-                                                contentDescription = "Flip H"
-                                            )
-                                            EditorActionIconBtn(
-                                                selected = state.getFlipY(selectedId),
-                                                onClick = { viewModel.toggleElementFlipY(selectedId) },
-                                                icon = Icons.Outlined.SwapVert,
-                                                contentDescription = "Flip V"
-                                            )
-                                            EditorActionIconBtn(
-                                                selected = showTransformPrecisionDialog,
-                                                onClick = { showTransformPrecisionDialog = true },
-                                                icon = Icons.Outlined.Transform,
-                                                contentDescription = "Precision"
                                             )
                                         }
 
@@ -678,13 +654,13 @@ fun EditorScreen(
         )
     }
 
-    // 6. Advanced 2D HSV Color Picker Dialog
+    // 6. Universal 2D HSV Color Picker Dialog
     if (showColorPickerDialog && colorPickerTargetId != null) {
         val targetId = colorPickerTargetId!!
-        AdvancedColorPickerDialog(
+        UniversalColorPickerDialog(
             initialColorHex = colorPickerInputHex,
+            savedSwatches = state.savedSwatches,
             onColorSelected = { hex ->
-                viewModel.addSavedSwatch(hex)
                 when (colorPickerMode) {
                     "STROKE" -> {
                         val curW = state.getElementStroke(targetId)?.second ?: 4f
@@ -706,6 +682,9 @@ fun EditorScreen(
                 }
                 showColorPickerDialog = false
             },
+            onAddSavedSwatch = { hex ->
+                viewModel.addSavedSwatch(hex)
+            },
             onDismiss = { showColorPickerDialog = false },
             onOpenEyedropper = {
                 showColorPickerDialog = false
@@ -714,17 +693,25 @@ fun EditorScreen(
         )
     }
 
-    // 7. Custom Gradient Builder Dialog
+    // 7. Universal Custom Gradient Builder Dialog
     if (showGradientBuilderDialog && colorPickerTargetId != null) {
         val targetId = colorPickerTargetId!!
         val curGradient = state.getElementGradient(targetId)
-        CustomGradientPickerDialog(
+        UniversalGradientPickerDialog(
             initialGradient = curGradient,
+            savedSwatches = state.savedSwatches,
             onGradientSelected = { grad ->
                 viewModel.updateElementGradient(targetId, grad)
                 showGradientBuilderDialog = false
             },
-            onDismiss = { showGradientBuilderDialog = false }
+            onAddSavedSwatch = { hex ->
+                viewModel.addSavedSwatch(hex)
+            },
+            onDismiss = { showGradientBuilderDialog = false },
+            onOpenEyedropper = {
+                showGradientBuilderDialog = false
+                viewModel.setEyedropperActive(true)
+            }
         )
     }
 

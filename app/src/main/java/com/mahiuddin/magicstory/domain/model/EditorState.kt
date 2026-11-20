@@ -59,6 +59,8 @@ data class EditorSnapshot(
     val textLineSpacings: Map<String, Float> = emptyMap(),
     val textCases: Map<String, String> = emptyMap(),
     val textBgColors: Map<String, String> = emptyMap(),
+    val textBgCornerRadii: Map<String, Float> = emptyMap(),
+    val textBgOpacities: Map<String, Float> = emptyMap(),
     val textShadowColors: Map<String, String> = emptyMap(),
     val textFontFamilies: Map<String, String> = emptyMap(),
     val customFontUris: Map<String, String> = emptyMap(),
@@ -90,6 +92,8 @@ data class MagicStoryEditorState(
     val textLineSpacings: Map<String, Float> = emptyMap(),
     val textCases: Map<String, String> = emptyMap(),
     val textBgColors: Map<String, String> = emptyMap(),
+    val textBgCornerRadii: Map<String, Float> = emptyMap(),
+    val textBgOpacities: Map<String, Float> = emptyMap(),
     val textShadowColors: Map<String, String> = emptyMap(),
     val textFontFamilies: Map<String, String> = emptyMap(),
     val customFontUris: Map<String, String> = emptyMap(),
@@ -199,6 +203,14 @@ data class MagicStoryEditorState(
 
     fun getTextBgColor(elementId: String): String? {
         return textBgColors[elementId]
+    }
+
+    fun getTextBgCornerRadius(elementId: String, defaultRadius: Float = 0f): Float {
+        return textBgCornerRadii[elementId] ?: defaultRadius
+    }
+
+    fun getTextBgOpacity(elementId: String, defaultOpacity: Float = 1.0f): Float {
+        return textBgOpacities[elementId] ?: defaultOpacity
     }
 
     fun getTextShadowColor(elementId: String): String? {

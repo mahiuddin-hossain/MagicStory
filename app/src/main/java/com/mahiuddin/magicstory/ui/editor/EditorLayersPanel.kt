@@ -12,6 +12,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -59,9 +60,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -72,6 +78,7 @@ import com.mahiuddin.magicstory.domain.model.MagicStoryEditorState
 import com.mahiuddin.magicstory.domain.model.TemplateElement
 import com.mahiuddin.magicstory.template.renderer.VectorShapePathFactory
 import com.mahiuddin.magicstory.ui.theme.PrimaryRed
+import com.mahiuddin.magicstory.util.BitmapUtils
 
 @Composable
 fun CheckerboardBox(
@@ -107,6 +114,7 @@ fun EditorLayersPanel(
     viewModel: EditorViewModel,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     val elements = editorState.template.elements.sortedByDescending { editorState.getElementZIndex(it.id, it.zIndex) }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -291,6 +299,13 @@ fun EditorLayersPanel(
                                                         fontSize = 11.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         color = fontColor,
+                                                        style = TextStyle(
+                                                            shadow = Shadow(
+                                                                color = Color.Black.copy(alpha = 0.75f),
+                                                                offset = Offset(1f, 1.5f),
+                                                                blurRadius = 3f
+                                                            )
+                                                        ),
                                                         maxLines = 2,
                                                         textAlign = TextAlign.Center
                                                     )
@@ -318,12 +333,34 @@ fun EditorLayersPanel(
                                                     }
                                                 }
                                                 is TemplateElement.PhotoSlot, is TemplateElement.PhotoCard -> {
-                                                    Icon(
-                                                        imageVector = Icons.Outlined.Image,
-                                                        contentDescription = "Photo Preview",
-                                                        tint = Color(0xFF444444),
-                                                        modifier = Modifier.size(22.dp)
-                                                    )
+                                                    val photoUriStr = when (elem) {
+                                                        is TemplateElement.PhotoSlot -> editorState.getPhotoUri(elem.id, elem.defaultAsset)
+                                                        is TemplateElement.PhotoCard -> editorState.getPhotoUri(elem.photoSlotId, elem.defaultAsset)
+                                                        else -> null
+                                                    }
+                                                    val photoBitmap = remember(photoUriStr) {
+                                                        if (!photoUriStr.isNullOrBlank()) {
+                                                            BitmapUtils.loadBitmap(context, photoUriStr, 120, 120)
+                                                        } else null
+                                                    }
+
+                                                    if (photoBitmap != null) {
+                                                        Image(
+                                                            bitmap = photoBitmap.asImageBitmap(),
+                                                            contentDescription = "Photo Layer Preview",
+                                                            contentScale = ContentScale.Crop,
+                                                            modifier = Modifier
+                                                                .fillMaxSize()
+                                                                .clip(RoundedCornerShape(3.dp))
+                                                        )
+                                                    } else {
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.Image,
+                                                            contentDescription = "Photo Preview",
+                                                            tint = Color(0xFF444444),
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    }
                                                 }
                                                 is TemplateElement.Background -> {
                                                     val bgHex = editorState.getTextColor("bg", elem.color)

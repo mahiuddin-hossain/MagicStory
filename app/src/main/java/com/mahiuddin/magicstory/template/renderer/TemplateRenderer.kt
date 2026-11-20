@@ -288,12 +288,22 @@ object TemplateRenderer {
         // Draw Text Background Pill if configured
         val bgHex = editorState.getTextBgColor(textElem.id)
         if (!bgHex.isNullOrBlank()) {
+            val bgCornerRadius = editorState.getTextBgCornerRadius(textElem.id, 10f) * scaleFactor
+            val bgOpacity = editorState.getTextBgOpacity(textElem.id, 1.0f).coerceIn(0f, 1f)
+            val colorInt = safeParseColor(bgHex)
+            val alphaInt = (bgOpacity * Color.alpha(colorInt)).toInt().coerceIn(0, 255)
+            val finalBgColor = Color.argb(alphaInt, Color.red(colorInt), Color.green(colorInt), Color.blue(colorInt))
+
             val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = safeParseColor(bgHex)
+                color = finalBgColor
                 style = Paint.Style.FILL
             }
             val pillRect = RectF(elemX - 6f * scaleFactor, elemY - 4f * scaleFactor, elemX + elemW + 6f * scaleFactor, elemY + elemH + 4f * scaleFactor)
-            canvas.drawRoundRect(pillRect, 10f * scaleFactor, 10f * scaleFactor, bgPaint)
+            if (bgCornerRadius > 0f) {
+                canvas.drawRoundRect(pillRect, bgCornerRadius, bgCornerRadius, bgPaint)
+            } else {
+                canvas.drawRect(pillRect, bgPaint)
+            }
         }
 
         val fontSize = editorState.getFontSize(textElem.id, textElem.fontSize)

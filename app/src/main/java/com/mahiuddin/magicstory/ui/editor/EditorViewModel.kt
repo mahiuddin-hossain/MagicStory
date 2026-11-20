@@ -1542,6 +1542,82 @@ class EditorViewModel(
         )
     }
 
+    fun updateTextBgCornerRadius(elementId: String, radius: Float) {
+        val currentState = _state.value ?: return
+        val newRadii = currentState.textBgCornerRadii.toMutableMap().apply {
+            put(elementId, radius)
+        }
+
+        pushState(
+            currentState.copy(textBgCornerRadii = newRadii),
+            currentState.editedTexts,
+            currentState.photoUris,
+            currentState.elementPositions,
+            currentState.elementSizes,
+            currentState.elementRotations,
+            currentState.elementFlips,
+            currentState.textFontSizes,
+            currentState.textColors,
+            currentState.textFontWeights,
+            currentState.textAlignments,
+            currentState.textLetterSpacings,
+            currentState.textLineSpacings,
+            currentState.textCases,
+            currentState.textBgColors,
+            currentState.textShadowColors,
+            currentState.textFontFamilies,
+            currentState.customFontUris,
+            currentState.lockedElementIds,
+            currentState.hiddenElementIds,
+            currentState.elementZOrders,
+            currentState.bgGradientConfig,
+            currentState.bgTextureType,
+            currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
+            currentState.deletedElementIds
+        )
+    }
+
+    fun updateTextBgOpacity(elementId: String, opacity: Float) {
+        val currentState = _state.value ?: return
+        val newOpacities = currentState.textBgOpacities.toMutableMap().apply {
+            put(elementId, opacity)
+        }
+
+        pushState(
+            currentState.copy(textBgOpacities = newOpacities),
+            currentState.editedTexts,
+            currentState.photoUris,
+            currentState.elementPositions,
+            currentState.elementSizes,
+            currentState.elementRotations,
+            currentState.elementFlips,
+            currentState.textFontSizes,
+            currentState.textColors,
+            currentState.textFontWeights,
+            currentState.textAlignments,
+            currentState.textLetterSpacings,
+            currentState.textLineSpacings,
+            currentState.textCases,
+            currentState.textBgColors,
+            currentState.textShadowColors,
+            currentState.textFontFamilies,
+            currentState.customFontUris,
+            currentState.lockedElementIds,
+            currentState.hiddenElementIds,
+            currentState.elementZOrders,
+            currentState.bgGradientConfig,
+            currentState.bgTextureType,
+            currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
+            currentState.deletedElementIds
+        )
+    }
+
     fun updateTextShadowColor(elementId: String, colorHex: String?) {
         val currentState = _state.value ?: return
         val newShadows = currentState.textShadowColors.toMutableMap().apply {
@@ -1903,10 +1979,8 @@ class EditorViewModel(
     fun resetToDefaults() {
         val currentState = _state.value ?: return
         val defaultSnapshot = EditorSnapshot(
-            emptyMap(), emptyMap(), emptyMap(), emptyMap(), emptyMap(),
-            emptyMap(), emptyMap(), emptyMap(), emptyMap(), emptyMap(),
-            emptyMap(), emptyMap(), emptyMap(), emptyMap(), emptyMap(),
-            emptyMap(), emptyMap(), emptySet(), emptySet(), emptyMap(), null, "NONE", emptyMap(), emptyMap(), emptyMap(), emptyMap(), emptySet()
+            editedTexts = emptyMap(),
+            photoUris = emptyMap()
         )
         _state.value = currentState.copy(
             editedTexts = emptyMap(),
