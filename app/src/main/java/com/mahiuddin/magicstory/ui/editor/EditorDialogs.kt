@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Icon
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.sp
 import com.mahiuddin.magicstory.domain.model.ExportFormat
 import com.mahiuddin.magicstory.domain.model.ExportScale
@@ -355,7 +356,8 @@ fun BoxScope.BottomPanelOverlay(
 fun EditorActionIconBtn(
     selected: Boolean,
     onClick: () -> Unit,
-    icon: ImageVector,
+    icon: ImageVector? = null,
+    iconRes: Int? = null,
     contentDescription: String
 ) {
     Surface(
@@ -366,12 +368,21 @@ fun EditorActionIconBtn(
         border = BorderStroke(1.dp, if (selected) PrimaryRed else Color(0xFFE0E0E0))
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(
-                imageVector = icon,
-                contentDescription = contentDescription,
-                tint = if (selected) PrimaryRed else Color(0xFF404040),
-                modifier = Modifier.size(18.dp)
-            )
+            if (iconRes != null) {
+                Icon(
+                    painter = painterResource(id = iconRes),
+                    contentDescription = contentDescription,
+                    tint = if (selected) PrimaryRed else Color(0xFF404040),
+                    modifier = Modifier.size(18.dp)
+                )
+            } else if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = contentDescription,
+                    tint = if (selected) PrimaryRed else Color(0xFF404040),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
 }

@@ -108,6 +108,7 @@ data class MagicStoryEditorState(
     val elementEffects: Map<String, LayerEffectConfig> = emptyMap(),
     val savedSwatches: List<String> = listOf("#C91F2C", "#A91521", "#E53945", "#000000", "#FFFFFF", "#1E3A8A", "#065F46", "#D97706", "#8235DC", "#3657FF"),
     val deletedElementIds: Set<String> = emptySet(),
+    val copiedElementId: String? = null,
     val selectedElementId: String? = null,
     val multiSelectedElementIds: Set<String> = emptySet(),
     val snappingGuideLines: List<GuideLine> = emptyList(),

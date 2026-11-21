@@ -1,5 +1,6 @@
 package com.mahiuddin.magicstory.ui.editor
 
+import com.mahiuddin.magicstory.R
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -171,6 +172,9 @@ fun EditorScreen(
     }
 
     var showShapeMenu by remember { mutableStateOf(false) }
+    var showTextMenu by remember { mutableStateOf(false) }
+    var showAddTextDialog by remember { mutableStateOf(false) }
+    var isVerticalTextType by remember { mutableStateOf(false) }
     var showTransformPrecisionDialog by remember { mutableStateOf(false) }
     var showLayersDrawer by remember { mutableStateOf(false) }
     var showExportOptionsDialog by remember { mutableStateOf(false) }
@@ -233,12 +237,25 @@ fun EditorScreen(
                 EditorSecondaryQuickToolbar(
                     canUndo = state.canUndo,
                     canRedo = state.canRedo,
+                    hasCopiedItem = state.copiedElementId != null,
+                    onPaste = { viewModel.pasteElementFromClipboard() },
                     showShapeMenu = showShapeMenu,
                     onOpenShapeLibrary = { showShapeMenu = true },
                     onDismissShapeMenu = { showShapeMenu = false },
                     onShapeSelected = { shapeKey ->
                         viewModel.addShapeElement(shapeKey)
                         showShapeMenu = false
+                    },
+                    showTextMenu = showTextMenu,
+                    onOpenTextMenu = { showTextMenu = true },
+                    onDismissTextMenu = { showTextMenu = false },
+                    onAddHorizontalTextClicked = {
+                        isVerticalTextType = false
+                        showAddTextDialog = true
+                    },
+                    onAddVerticalTextClicked = {
+                        isVerticalTextType = true
+                        showAddTextDialog = true
                     },
                     onInsertImage = { insertImageLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                     onSetExportResolution = { viewModel.setExportResolution(it) },
@@ -389,13 +406,13 @@ fun EditorScreen(
                                             EditorActionIconBtn(
                                                 selected = textEditDialogVisible,
                                                 onClick = { textEditDialogVisible = true },
-                                                icon = Icons.Outlined.Edit,
+                                                iconRes = R.drawable.edit_text_content,
                                                 contentDescription = "Edit Text"
                                             )
                                             EditorActionIconBtn(
                                                 selected = activeSubTool == ActiveSubTool.FONT_FAMILY,
                                                 onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.FONT_FAMILY) ActiveSubTool.NONE else ActiveSubTool.FONT_FAMILY },
-                                                icon = Icons.Outlined.Title,
+                                                iconRes = R.drawable.font_text_icon,
                                                 contentDescription = "Font Family"
                                             )
                                             EditorActionIconBtn(
@@ -407,19 +424,19 @@ fun EditorScreen(
                                             EditorActionIconBtn(
                                                 selected = activeSubTool == ActiveSubTool.TEXT_COLOR,
                                                 onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.TEXT_COLOR) ActiveSubTool.NONE else ActiveSubTool.TEXT_COLOR },
-                                                icon = Icons.Outlined.FormatColorFill,
+                                                iconRes = R.drawable.text_fill_color_icon,
                                                 contentDescription = "Color & Fill"
                                             )
                                             EditorActionIconBtn(
                                                 selected = activeSubTool == ActiveSubTool.TEXT_SPACING,
                                                 onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.TEXT_SPACING) ActiveSubTool.NONE else ActiveSubTool.TEXT_SPACING },
-                                                icon = Icons.Outlined.FormatLineSpacing,
+                                                iconRes = R.drawable.text_spacing_icon,
                                                 contentDescription = "Spacing"
                                             )
                                             EditorActionIconBtn(
                                                 selected = activeSubTool == ActiveSubTool.TEXT_BG,
                                                 onClick = { activeSubTool = if (activeSubTool == ActiveSubTool.TEXT_BG) ActiveSubTool.NONE else ActiveSubTool.TEXT_BG },
-                                                icon = Icons.Outlined.Palette,
+                                                iconRes = R.drawable.text_background_icon,
                                                 contentDescription = "Text Highlight"
                                             )
                                         }
@@ -546,10 +563,10 @@ fun EditorScreen(
                                         )
                                         if (selectedElem !is TemplateElement.Background) {
                                             EditorActionIconBtn(
-                                                selected = false,
-                                                onClick = { viewModel.duplicateElement(selectedId) },
+                                                selected = state.copiedElementId == selectedId,
+                                                onClick = { viewModel.copyElementToClipboard(selectedId) },
                                                 icon = Icons.Outlined.ContentCopy,
-                                                contentDescription = "Duplicate"
+                                                contentDescription = "Copy Element"
                                             )
                                             EditorActionIconBtn(
                                                 selected = false,
@@ -749,6 +766,18 @@ fun EditorScreen(
                 pendingCropSlotPhotoUri = null
                 targetPhotoSlotId = null
             }
+        )
+    }
+
+    // 10. Add Horizontal / Vertical Text Dialog
+    if (showAddTextDialog) {
+        AddTextInputDialog(
+            isVertical = isVerticalTextType,
+            onConfirm = { input ->
+                viewModel.addTextElement(input, isVertical = isVerticalTextType)
+                showAddTextDialog = false
+            },
+            onDismiss = { showAddTextDialog = false }
         )
     }
 }

@@ -115,7 +115,9 @@ fun EditorLayersPanel(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val elements = editorState.template.elements.sortedByDescending { editorState.getElementZIndex(it.id, it.zIndex) }
+    val elements = editorState.template.elements
+        .filter { !editorState.isElementDeleted(it.id) }
+        .sortedByDescending { editorState.getElementZIndex(it.id, it.zIndex) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Scrim backdrop overlay

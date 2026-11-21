@@ -671,6 +671,91 @@ class EditorViewModel(
         )
     }
 
+    fun addTextElement(text: String, isVertical: Boolean = false) {
+        val currentState = _state.value ?: return
+        val currentElements = currentState.template.elements
+
+        val maxZ = (currentElements.maxOfOrNull { currentState.getElementZIndex(it.id, it.zIndex) } ?: 0) + 10
+        val timestamp = System.currentTimeMillis() % 100000
+        val newId = "inserted_text_$timestamp"
+
+        val formattedText = if (isVertical) {
+            text.split("\n").flatMap { line -> line.toCharArray().map { it.toString() } }.joinToString("\n")
+        } else {
+            text
+        }
+
+        val initW = if (isVertical) 0.18f else 0.55f
+        val initH = if (isVertical) 0.45f else 0.12f
+        val initX = (1f - initW) / 2f
+        val initY = (1f - initH) / 2f
+
+        val newTextElem = TemplateElement.Text(
+            id = newId,
+            zIndex = maxZ,
+            visible = true,
+            opacity = 1.0f,
+            x = initX,
+            y = initY,
+            width = initW,
+            height = initH,
+            rotation = 0f,
+            defaultText = formattedText,
+            color = "#000000",
+            fontSize = if (isVertical) 18f else 22f,
+            fontWeight = "BOLD",
+            fontFamily = "SANS_SERIF",
+            textAlignment = "CENTER",
+            editable = true,
+            label = if (isVertical) "Vertical Text" else "Horizontal Text"
+        )
+
+        val newPositions = currentState.elementPositions.toMutableMap().apply {
+            put(newId, Pair(initX, initY))
+        }
+        val newSizes = currentState.elementSizes.toMutableMap().apply {
+            put(newId, Pair(initW, initH))
+        }
+        val newZOrders = currentState.elementZOrders.toMutableMap().apply {
+            put(newId, maxZ)
+        }
+
+        val updatedManifest = currentState.template.copy(
+            elements = currentState.template.elements + newTextElem
+        )
+
+        pushState(
+            currentState.copy(template = updatedManifest, selectedElementId = newId),
+            currentState.editedTexts,
+            currentState.photoUris,
+            newPositions,
+            newSizes,
+            currentState.elementRotations,
+            currentState.elementFlips,
+            currentState.textFontSizes,
+            currentState.textColors,
+            currentState.textFontWeights,
+            currentState.textAlignments,
+            currentState.textLetterSpacings,
+            currentState.textLineSpacings,
+            currentState.textCases,
+            currentState.textBgColors,
+            currentState.textShadowColors,
+            currentState.textFontFamilies,
+            currentState.customFontUris,
+            currentState.lockedElementIds,
+            currentState.hiddenElementIds,
+            newZOrders,
+            currentState.bgGradientConfig,
+            currentState.bgTextureType,
+            currentState.elementGradients,
+            currentState.elementStrokes,
+            currentState.elementOpacities,
+            currentState.elementEffects,
+            currentState.deletedElementIds
+        )
+    }
+
     fun addImageElement(context: Context, uri: Uri) {
         val currentState = _state.value ?: return
         val currentElements = currentState.template.elements
@@ -1698,9 +1783,26 @@ class EditorViewModel(
         )
     }
 
+    fun copyElementToClipboard(elementId: String) {
+        val currentState = _state.value ?: return
+        _state.value = currentState.copy(copiedElementId = elementId)
+    }
+
+    fun pasteElementFromClipboard() {
+        val currentState = _state.value ?: return
+        val copiedId = currentState.copiedElementId ?: return
+
+        duplicateElement(copiedId)
+        val updatedState = _state.value ?: return
+        _state.value = updatedState.copy(copiedElementId = null)
+    }
+
     fun duplicateElement(elementId: String) {
         val currentState = _state.value ?: return
         val element = currentState.template.elements.find { it.id == elementId } ?: return
+
+        val currentElements = currentState.template.elements
+        val maxZ = (currentElements.maxOfOrNull { currentState.getElementZIndex(it.id, it.zIndex) } ?: 0) + 10
 
         val currentX = currentState.getElementX(elementId, when (element) {
             is TemplateElement.Text -> element.x
@@ -1724,17 +1826,75 @@ class EditorViewModel(
         val shiftedX = (currentX + 0.04f).coerceAtMost(0.8f)
         val shiftedY = (currentY + 0.04f).coerceAtMost(0.8f)
 
+        val duplicatedElement = when (element) {
+            is TemplateElement.Text -> element.copy(
+                id = duplicatedId,
+                zIndex = maxZ,
+                x = shiftedX,
+                y = shiftedY,
+                defaultText = currentState.getTextValue(elementId, element.defaultText),
+                color = currentState.getTextColor(elementId, element.color),
+                fontSize = currentState.getFontSize(elementId, element.fontSize),
+                fontWeight = currentState.getTextFontWeight(elementId, element.fontWeight),
+                fontFamily = currentState.getTextFontFamily(elementId, element.fontFamily)
+            )
+            is TemplateElement.Shape -> element.copy(
+                id = duplicatedId,
+                zIndex = maxZ,
+                x = shiftedX,
+                y = shiftedY,
+                color = currentState.getElementStroke(elementId)?.first ?: element.color
+            )
+            is TemplateElement.PhotoSlot -> element.copy(
+                id = duplicatedId,
+                zIndex = maxZ,
+                x = shiftedX,
+                y = shiftedY,
+                defaultAsset = currentState.getPhotoUri(elementId, element.defaultAsset)
+            )
+            is TemplateElement.PhotoCard -> element.copy(
+                id = duplicatedId,
+                zIndex = maxZ,
+                x = shiftedX,
+                y = shiftedY,
+                defaultAsset = currentState.getPhotoUri(element.photoSlotId, element.defaultAsset)
+            )
+            is TemplateElement.PillCta -> element.copy(
+                id = duplicatedId,
+                zIndex = maxZ,
+                x = shiftedX,
+                y = shiftedY
+            )
+            else -> element
+        }
+
+        val newPhotoUris = currentState.photoUris.toMutableMap().apply {
+            currentState.getPhotoUri(elementId, null)?.let { put(duplicatedId, it) }
+        }
         val newPositions = currentState.elementPositions.toMutableMap().apply {
             put(duplicatedId, Pair(shiftedX, shiftedY))
         }
+        val newSizes = currentState.elementSizes.toMutableMap().apply {
+            put(duplicatedId, Pair(currentState.getElementW(elementId, 0.3f), currentState.getElementH(elementId, 0.2f)))
+        }
+        val newRotations = currentState.elementRotations.toMutableMap().apply {
+            put(duplicatedId, currentState.getElementRotation(elementId, 0f))
+        }
+        val newZOrders = currentState.elementZOrders.toMutableMap().apply {
+            put(duplicatedId, maxZ)
+        }
+
+        val updatedManifest = currentState.template.copy(
+            elements = currentState.template.elements + duplicatedElement
+        )
 
         pushState(
-            currentState,
+            currentState.copy(template = updatedManifest, selectedElementId = duplicatedId),
             currentState.editedTexts,
-            currentState.photoUris,
+            newPhotoUris,
             newPositions,
-            currentState.elementSizes,
-            currentState.elementRotations,
+            newSizes,
+            newRotations,
             currentState.elementFlips,
             currentState.textFontSizes,
             currentState.textColors,
@@ -1749,7 +1909,7 @@ class EditorViewModel(
             currentState.customFontUris,
             currentState.lockedElementIds,
             currentState.hiddenElementIds,
-            currentState.elementZOrders,
+            newZOrders,
             currentState.bgGradientConfig,
             currentState.bgTextureType,
             currentState.elementGradients,
@@ -1758,8 +1918,6 @@ class EditorViewModel(
             currentState.elementEffects,
             currentState.deletedElementIds
         )
-
-        selectElement(duplicatedId)
     }
 
     fun deleteElement(elementId: String) {
