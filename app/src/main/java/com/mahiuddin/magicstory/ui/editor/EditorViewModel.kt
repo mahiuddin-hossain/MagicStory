@@ -1292,6 +1292,34 @@ class EditorViewModel(
         val currentState = _state.value ?: return
         if (currentState.isElementLocked(elementId)) return
 
+        val element = currentState.template.elements.find { it.id == elementId }
+
+        val newSizes = currentState.elementSizes.toMutableMap().apply {
+            put(elementId, Pair(newW, newH))
+        }
+
+        val newFontSizes = currentState.textFontSizes.toMutableMap()
+        if (element is TemplateElement.Text) {
+            val baseW = element.width
+            val baseFontSize = element.fontSize
+            if (baseW > 0f) {
+                val scale = newW / baseW
+                val newFontSize = (baseFontSize * scale).coerceIn(8f, 500f)
+                newFontSizes[elementId] = newFontSize
+            }
+        }
+
+        _state.value = currentState.copy(
+            elementSizes = newSizes,
+            textFontSizes = newFontSizes,
+            selectedElementId = elementId
+        )
+    }
+
+    fun updateTextContainerSize(elementId: String, newW: Float, newH: Float) {
+        val currentState = _state.value ?: return
+        if (currentState.isElementLocked(elementId)) return
+
         val newSizes = currentState.elementSizes.toMutableMap().apply {
             put(elementId, Pair(newW, newH))
         }

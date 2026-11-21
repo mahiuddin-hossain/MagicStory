@@ -21,17 +21,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -40,12 +45,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.material3.Icon
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.sp
 import com.mahiuddin.magicstory.domain.model.ExportFormat
 import com.mahiuddin.magicstory.domain.model.ExportScale
@@ -87,40 +95,73 @@ fun getElementLabel(element: TemplateElement?, elementId: String): String {
 @Composable
 fun TextEditDialog(
     initialText: String,
-    onConfirm: (String) -> Unit,
+    onTextChange: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var text by remember { mutableStateOf(initialText) }
+    var text by remember(initialText) { mutableStateOf(initialText) }
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Edit Text Content", fontWeight = FontWeight.Bold, color = Color(0xFF202020)) },
-        text = {
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+        keyboardController?.show()
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFF202020).copy(alpha = 0.95f),
+        border = BorderStroke(1.5.dp, PrimaryRed),
+        shadowElevation = 10.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
             OutlinedTextField(
                 value = text,
-                onValueChange = { text = it },
-                modifier = Modifier.fillMaxWidth(),
-                maxLines = 5,
-                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = PrimaryRed, cursorColor = PrimaryRed)
+                onValueChange = {
+                    text = it
+                    onTextChange(it)
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(focusRequester),
+                singleLine = false,
+                maxLines = 3,
+                textStyle = TextStyle(
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                ),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    cursorColor = PrimaryRed
+                )
             )
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(text) },
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryRed),
-                shape = RoundedCornerShape(8.dp)
+
+            IconButton(
+                onClick = {
+                    onDismiss()
+                    keyboardController?.hide()
+                },
+                modifier = Modifier.size(36.dp)
             ) {
-                Text("Apply", fontWeight = FontWeight.Bold)
+                Icon(
+                    imageVector = Icons.Outlined.Check,
+                    contentDescription = "Done",
+                    tint = PrimaryRed,
+                    modifier = Modifier.size(22.dp)
+                )
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel", color = Color(0xFF777777))
-            }
-        },
-        containerColor = Color.White,
-        shape = RoundedCornerShape(16.dp)
-    )
+        }
+    }
 }
 
 @Composable

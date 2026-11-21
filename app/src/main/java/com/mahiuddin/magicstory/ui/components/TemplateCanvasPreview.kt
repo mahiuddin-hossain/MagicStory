@@ -1,6 +1,10 @@
 package com.mahiuddin.magicstory.ui.components
 
 import android.graphics.Bitmap
+import android.graphics.Paint
+import android.graphics.Typeface
+import android.text.StaticLayout
+import android.text.TextPaint
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -73,7 +77,9 @@ fun TemplateCanvasPreview(
     onElementResize: (String, Float, Float) -> Unit = { _, _, _ -> },
     onElementRotate: (String, Float) -> Unit = { _, _ -> },
     onSnappingGuides: (List<GuideLine>) -> Unit = {},
-    onDragEnd: () -> Unit = {}
+    onDragEnd: () -> Unit = {},
+    onTextDoubleTap: (String) -> Unit = {},
+    onTextContainerResize: (String, Float, Float) -> Unit = { _, _, _ -> }
 ) {
     val context = LocalContext.current
     val bitmapCache = remember { mutableMapOf<String, Bitmap>() }
@@ -95,22 +101,44 @@ fun TemplateCanvasPreview(
     val currentOnRotate by rememberUpdatedState(onElementRotate)
     val currentOnSnappingGuides by rememberUpdatedState(onSnappingGuides)
     val currentOnDragEnd by rememberUpdatedState(onDragEnd)
+    val currentOnTextDoubleTap by rememberUpdatedState(onTextDoubleTap)
+    val currentOnTextContainerResize by rememberUpdatedState(onTextContainerResize)
 
     val interactiveModifier = if (isInteractive) {
         Modifier
             .pointerInput(zoomScale, panOffset) {
-                detectTapGestures { offset ->
-                    val canvasW = size.width.toFloat()
-                    val canvasH = size.height.toFloat()
-                    if (canvasW > 0 && canvasH > 0) {
-                        val localX = if (zoomScale != 1.0f) (offset.x - panOffset.x) / zoomScale else offset.x
-                        val localY = if (zoomScale != 1.0f) (offset.y - panOffset.y) / zoomScale else offset.y
-                        val normX = localX / canvasW
-                        val normY = localY / canvasH
-                        val (hitId, _) = findHitElementAndHandle(currentManifest, currentState, normX, normY, canvasW, canvasH)
-                        currentOnSelect(hitId)
+                detectTapGestures(
+                    onTap = { offset ->
+                        val canvasW = size.width.toFloat()
+                        val canvasH = size.height.toFloat()
+                        if (canvasW > 0 && canvasH > 0) {
+                            val localX = if (zoomScale != 1.0f) (offset.x - panOffset.x) / zoomScale else offset.x
+                            val localY = if (zoomScale != 1.0f) (offset.y - panOffset.y) / zoomScale else offset.y
+                            val normX = localX / canvasW
+                            val normY = localY / canvasH
+                            val (hitId, _) = findHitElementAndHandle(currentManifest, currentState, normX, normY, canvasW, canvasH)
+                            currentOnSelect(hitId)
+                        }
+                    },
+                    onDoubleTap = { offset ->
+                        val canvasW = size.width.toFloat()
+                        val canvasH = size.height.toFloat()
+                        if (canvasW > 0 && canvasH > 0) {
+                            val localX = if (zoomScale != 1.0f) (offset.x - panOffset.x) / zoomScale else offset.x
+                            val localY = if (zoomScale != 1.0f) (offset.y - panOffset.y) / zoomScale else offset.y
+                            val normX = localX / canvasW
+                            val normY = localY / canvasH
+                            val (hitId, _) = findHitElementAndHandle(currentManifest, currentState, normX, normY, canvasW, canvasH)
+                            if (hitId != null) {
+                                currentOnSelect(hitId)
+                                val elem = currentManifest.elements.find { it.id == hitId }
+                                if (elem is TemplateElement.Text || (elem is TemplateElement.PhotoCard && hitId == elem.captionId)) {
+                                    currentOnTextDoubleTap(hitId)
+                                }
+                            }
+                        }
                     }
-                }
+                )
             }
             .pointerInput(zoomScale, panOffset) {
                 awaitPointerEventScope {
@@ -288,7 +316,15 @@ fun TemplateCanvasPreview(
                                         }
                                         else -> {}
                                     }
-                                    currentOnResize(targetId, currentW, currentH)
+
+                                    val isEdgeHandle = handle == TouchHandle.RIGHT || handle == TouchHandle.LEFT || handle == TouchHandle.BOTTOM || handle == TouchHandle.TOP
+                                    val isTextElement = currentManifest.elements.find { it.id == targetId } is TemplateElement.Text
+
+                                    if (isEdgeHandle && isTextElement) {
+                                        currentOnTextContainerResize(targetId, currentW, currentH)
+                                    } else {
+                                        currentOnResize(targetId, currentW, currentH)
+                                    }
                                     change.consume()
                                 }
                                 else -> {}
@@ -406,8 +442,42 @@ private fun checkElementHandleHit(
     val lx = (dx * cos(rad) - dy * sin(rad)).toFloat()
     val ly = (dx * sin(rad) + dy * cos(rad)).toFloat()
 
-    val w2 = elemW / 2f
-    val h2 = elemH / 2f
+    var boxW = elemW
+    var boxH = elemH
+
+    if (element is TemplateElement.Text) {
+        val textVal = editorState.getTextValue(element.id, element.defaultText)
+        if (textVal.isNotEmpty()) {
+            val fontSize = editorState.getFontSize(element.id, element.fontSize) * scaleFactor
+            val fontFamStr = editorState.getTextFontFamily(element.id, element.fontFamily).uppercase()
+            val style = when (editorState.getTextFontWeight(element.id, element.fontWeight).uppercase()) {
+                "BOLD", "EXTRA_BOLD" -> Typeface.BOLD
+                else -> Typeface.NORMAL
+            }
+            val tf = when {
+                fontFamStr.contains("SERIF") -> Typeface.create(Typeface.SERIF, style)
+                fontFamStr.contains("SCRIPT") || fontFamStr.contains("CURSIVE") -> Typeface.create("cursive", if (style == Typeface.BOLD) Typeface.BOLD_ITALIC else Typeface.ITALIC)
+                fontFamStr.contains("MONO") -> Typeface.create(Typeface.MONOSPACE, style)
+                else -> Typeface.create(Typeface.SANS_SERIF, style)
+            }
+            val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                textSize = fontSize
+                typeface = tf
+            }
+            val lines = textVal.split("\n")
+            val textMeasuredW = lines.maxOfOrNull { textPaint.measureText(it) } ?: elemW
+            val textMeasuredH = lines.size * (fontSize * 1.25f)
+
+            val paddingX = 12f * scaleFactor
+            val paddingY = 6f * scaleFactor
+
+            boxW = (textMeasuredW + paddingX * 2f).coerceAtMost(elemW + paddingX * 2f)
+            boxH = textMeasuredH + paddingY * 2f
+        }
+    }
+
+    val w2 = boxW / 2f
+    val h2 = boxH / 2f
 
     val isSelected = editorState.isElementSelected(element.id)
     val isLocked = editorState.isElementLocked(element.id)

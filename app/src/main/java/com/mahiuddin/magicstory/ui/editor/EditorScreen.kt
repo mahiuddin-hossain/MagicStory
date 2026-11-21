@@ -290,7 +290,9 @@ fun EditorScreen(
                             onElementResize = { id, w, h -> viewModel.updateElementSize(id, w, h) },
                             onElementRotate = { id, rot -> viewModel.updateElementRotation(id, rot) },
                             onSnappingGuides = { viewModel.setSnappingGuideLines(it) },
-                            onDragEnd = { viewModel.commitGestureEnd() }
+                            onDragEnd = { viewModel.commitGestureEnd() },
+                            onTextDoubleTap = { textEditDialogVisible = true },
+                            onTextContainerResize = { id, w, h -> viewModel.updateTextContainerSize(id, w, h) }
                         )
 
                         // Interactive Eyedropper Layer Overlay
@@ -630,9 +632,8 @@ fun EditorScreen(
         val currentText = state.getTextValue(state.selectedElementId!!, "")
         TextEditDialog(
             initialText = currentText,
-            onConfirm = { newText ->
+            onTextChange = { newText ->
                 viewModel.updateText(state.selectedElementId!!, newText)
-                textEditDialogVisible = false
             },
             onDismiss = { textEditDialogVisible = false }
         )

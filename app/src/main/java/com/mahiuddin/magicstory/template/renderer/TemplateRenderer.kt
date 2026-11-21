@@ -412,7 +412,22 @@ object TemplateRenderer {
         drawInnerGlow(canvas, rect, effect, scaleFactor)
 
         val isSelected = !editorState.isExporting && editorState.isElementSelected(textElem.id)
-        drawSelectionOutline(canvas, RectF(elemX, elemY, elemX + elemW, elemY + elemH), isSelected, scaleFactor)
+
+        val textMeasuredW = (0 until staticLayout.lineCount).maxOfOrNull { staticLayout.getLineWidth(it) } ?: elemW
+        val textMeasuredH = staticLayout.height.toFloat()
+        val paddingX = 12f * scaleFactor
+        val paddingY = 6f * scaleFactor
+        val actualBoxW = (textMeasuredW + paddingX * 2f).coerceAtMost(elemW + paddingX * 2f)
+        val actualBoxH = textMeasuredH + paddingY * 2f
+        val boxLeft = when (textAlign.uppercase()) {
+            "LEFT" -> elemX - paddingX
+            "RIGHT" -> elemX + elemW - textMeasuredW - paddingX
+            else -> elemX + (elemW - textMeasuredW) / 2f - paddingX
+        }
+        val boxTop = startY - paddingY
+        val tightTextRect = RectF(boxLeft, boxTop, boxLeft + actualBoxW, boxTop + actualBoxH)
+
+        drawSelectionOutline(canvas, tightTextRect, isSelected, scaleFactor)
 
         canvas.restore()
     }

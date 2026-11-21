@@ -61,6 +61,7 @@ fun EditorCanvasManager(
     context: Context,
     colorPickerMode: String,
     onClearSubTool: () -> Unit,
+    onTextDoubleTap: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var zoomScale by remember { mutableFloatStateOf(1.0f) }
@@ -120,7 +121,9 @@ fun EditorCanvasManager(
                 onElementResize = { id, w, h -> viewModel.updateElementSize(id, w, h) },
                 onElementRotate = { id, rot -> viewModel.updateElementRotation(id, rot) },
                 onSnappingGuides = { viewModel.setSnappingGuideLines(it) },
-                onDragEnd = { viewModel.commitGestureEnd() }
+                onDragEnd = { viewModel.commitGestureEnd() },
+                onTextDoubleTap = onTextDoubleTap,
+                onTextContainerResize = { id, w, h -> viewModel.updateTextContainerSize(id, w, h) }
             )
 
             // Interactive Eyedropper Layer Overlay
